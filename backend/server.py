@@ -1,0 +1,1593 @@
+"""Triad Realty API — entry point (uvicorn server:app)."""
+
+import logging
+import os
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Optional
+
+import httpx
+from dotenv import load_dotenv
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, status, UploadFile, File
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from db import (
+    USE_MONGO,
+    close_db,
+    db_count,
+    db_delete,
+    db_delete_many,
+    db_find,
+    db_find_one,
+    db_insert,
+    db_update,
+)
+from deps import (
+    get_current_user,
+    require_developer,
+    require_owner,
+    require_owner_or_developer,
+    require_staff_or_owner,
+)
+from rate_limit import check_rate_limit
+from seed_data import BLOGS, CAREERS, PROJECTS, GALLERY
+from security import (
+    ROLE_DEVELOPER,
+    ROLE_OWNER,
+    ROLE_STAFF,
+    create_access_token,
+    has_strong_jwt_secret,
+    hash_password,
+    verify_password,
+)
+
+ROOT_DIR = Path(__file__).parent
+_uploads_dir = os.path.join(str(ROOT_DIR), "uploads")
+os.makedirs(_uploads_dir, exist_ok=True)
+load_dotenv(ROOT_DIR / ".env")
+
+DEFAULT_ORG_ID = os.environ.get("DEFAULT_ORG_ID", "default-org")
+
+# Credentials must be set in .env — no hardcoded fallback passwords in production.
+DEVELOPER_EMAIL = os.environ.get("DEVELOPER_EMAIL", "developer@triad.ae")
+DEVELOPER_PASSWORD = os.environ.get("DEVELOPER_PASSWORD") or "developer"
+OWNER_EMAIL = os.environ.get("OWNER_EMAIL", "owner@triad.ae")
+OWNER_PASSWORD = os.environ.get("OWNER_PASSWORD") or "owner"
+LEGACY_OWNER_PASSWORD = "onwer"
+STAFF_EMAIL = os.environ.get("STAFF_EMAIL", "normal@triad.ae")
+STAFF_PASSWORD = os.environ.get("STAFF_PASSWORD") or "normal"
+
+# Email aliases: any key email will resolve to its value before lookup
+EMAIL_ALIASES: dict[str, str] = {
+    "onwer@triad.ae": OWNER_EMAIL,
+}
+REELLY_BASE = os.environ.get(
+    "REELLY_API_BASE",
+    "https://search-listings-production.up.railway.app/v1",
+)
+REELLY_API_KEY = os.environ.get("REELLY_API_KEY", "")
+TARGET_PROJECT_COUNT = int(os.environ.get("TARGET_PROJECT_COUNT", "100"))
+
+app = FastAPI(title="Triad Realty API")
+api_router = APIRouter(prefix="/api")
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
+reelly_client: Optional[httpx.AsyncClient] = None
+_server_start_time: datetime = datetime.now(timezone.utc)
+
+
+def now_iso():
+    return datetime.now(timezone.utc).isoformat()
+
+
+# ----------------------------- Models -----------------------------
+class LeadIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    name: str = Field(..., min_length=1, max_length=120)
+    email: EmailStr
+    phone: str = Field(..., max_length=30)
+    project_id: Optional[str] = Field(None, max_length=100)
+    asset: Optional[str] = Field("brochure", max_length=50)
+    source_page: Optional[str] = Field(None, max_length=200)
+
+    @field_validator("name", "phone", mode="before")
+    @classmethod
+    def strip_str(cls, v: Any) -> Any:
+        return v.strip() if isinstance(v, str) else v
+
+
+class Lead(LeadIn):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    organization_id: str = DEFAULT_ORG_ID
+    status: str = "new"
+    assigned_to: Optional[str] = None
+    created_at: str = Field(default_factory=now_iso)
+    updated_at: str = Field(default_factory=now_iso)
+
+
+class LeadPatch(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    status: Optional[str] = Field(None, max_length=50)
+    assigned_to: Optional[str] = Field(None, max_length=100)
+
+
+class ContactIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    name: str = Field(..., min_length=1, max_length=120)
+    email: EmailStr
+    phone: Optional[str] = Field(None, max_length=30)
+    subject: Optional[str] = Field(None, max_length=200)
+    message: str = Field(..., min_length=1, max_length=5000)
+
+    @field_validator("name", "phone", "subject", "message", mode="before")
+    @classmethod
+    def strip_str(cls, v: Any) -> Any:
+        return v.strip() if isinstance(v, str) else v
+
+
+class Contact(ContactIn):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    created_at: str = Field(default_factory=now_iso)
+
+
+class ApplicationIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    name: str = Field(..., min_length=1, max_length=120)
+    email: EmailStr
+    phone: str = Field(..., max_length=30)
+    position: str = Field(..., max_length=120)
+    experience_years: Optional[int] = Field(None, ge=0, le=60)
+    cover_letter: Optional[str] = Field(None, max_length=10000)
+    portfolio_url: Optional[str] = Field(None, max_length=500)
+
+    @field_validator("name", "phone", "position", "cover_letter", mode="before")
+    @classmethod
+    def strip_str(cls, v: Any) -> Any:
+        return v.strip() if isinstance(v, str) else v
+
+
+class Application(ApplicationIn):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    created_at: str = Field(default_factory=now_iso)
+
+
+class LoginIn(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class UserCreate(BaseModel):
+    email: EmailStr
+    password: str
+    name: str
+    organization_id: Optional[str] = None
+
+
+class OwnerCreate(BaseModel):
+    email: EmailStr
+    password: str
+    name: str
+    organization_name: str
+
+
+class OwnerPatch(BaseModel):
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    password: Optional[str] = None
+    organization_name: Optional[str] = None
+
+
+class StaffPatch(BaseModel):
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    password: Optional[str] = None
+
+
+class OrgPatch(BaseModel):
+    name: Optional[str] = None
+
+
+class PopupSettingsIn(BaseModel):
+    tag: Optional[str] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    btn1_label: Optional[str] = None
+    btn1_link: Optional[str] = None
+    btn2_label: Optional[str] = None
+    btn2_link: Optional[str] = None
+    active: bool
+    poster_image_url: Optional[str] = None
+    project_link: Optional[str] = None
+
+
+class HomepageSettingsIn(BaseModel):
+    launch_title: str
+    launch_description: str
+    launch_video_url: Optional[str] = None
+    stat1_value: str
+    stat1_label: str
+    stat2_value: str
+    stat2_label: str
+    stat3_value: str
+    stat3_label: str
+    stat4_value: str
+    stat4_label: str
+    founders_image_url: Optional[str] = None
+    team_comes_first: Optional[bool] = False
+    company_address: Optional[str] = None
+    company_phone: Optional[str] = None
+    company_email: Optional[str] = None
+    company_whatsapp: Optional[str] = None
+    company_instagram: Optional[str] = None
+    company_linkedin: Optional[str] = None
+
+
+# ─── Admin CMS typed input models ───────────────────────────────────────────
+# These replace the raw `dict` payloads previously accepted by admin endpoints,
+# preventing arbitrary field injection (NoSQL / object-pollution style attacks).
+
+class ProjectIn(BaseModel):
+    """Validated project payload for admin create/update."""
+    model_config = ConfigDict(extra="ignore")
+    id: Optional[str] = Field(None, max_length=150)
+    name: str = Field(..., min_length=1, max_length=200)
+    developer: Optional[str] = Field(None, max_length=200)
+    location: Optional[str] = Field(None, max_length=200)
+    emirate: Optional[str] = Field(None, max_length=100)
+    type: Optional[str] = Field(None, max_length=100)
+    configuration: Optional[list] = None
+    price_from: Optional[int] = Field(None, ge=0)
+    price_currency: Optional[str] = Field("AED", max_length=10)
+    sqft_from: Optional[int] = Field(None, ge=0)
+    handover: Optional[str] = Field(None, max_length=100)
+    status: Optional[str] = Field(None, max_length=100)
+    hot: Optional[bool] = False
+    tagline: Optional[str] = Field(None, max_length=300)
+    hero: Optional[str] = Field(None, max_length=500)
+    gallery: Optional[list] = None
+    amenities: Optional[list] = None
+    payment_plan: Optional[list] = None
+    floor_plan: Optional[str] = Field(None, max_length=500)
+    map_image: Optional[str] = Field(None, max_length=500)
+    transactions: Optional[list] = None
+    description: Optional[str] = Field(None, max_length=5000)
+    source: Optional[str] = Field(None, max_length=50)
+
+    @field_validator("name", "developer", "location", "emirate", "type", "tagline", "description", mode="before")
+    @classmethod
+    def strip_str(cls, v: Any) -> Any:
+        return v.strip() if isinstance(v, str) else v
+
+
+class BlogIn(BaseModel):
+    """Validated blog payload for admin create/update."""
+    model_config = ConfigDict(extra="ignore")
+    id: Optional[str] = Field(None, max_length=150)
+    title: str = Field(..., min_length=1, max_length=300)
+    slug: Optional[str] = Field(None, max_length=300)
+    author: Optional[str] = Field(None, max_length=120)
+    date: Optional[str] = Field(None, max_length=50)
+    category: Optional[str] = Field(None, max_length=100)
+    excerpt: Optional[str] = Field(None, max_length=1000)
+    content: Optional[str] = Field(None, max_length=100000)
+    hero: Optional[str] = Field(None, max_length=500)
+    tags: Optional[list] = None
+
+    @field_validator("title", "author", "category", "excerpt", mode="before")
+    @classmethod
+    def strip_str(cls, v: Any) -> Any:
+        return v.strip() if isinstance(v, str) else v
+
+
+class ReviewIn(BaseModel):
+    """Validated review payload for admin create."""
+    model_config = ConfigDict(extra="ignore")
+    id: Optional[str] = Field(None, max_length=150)
+    author: str = Field(..., min_length=1, max_length=120)
+    rating: int = Field(..., ge=1, le=5)
+    text: str = Field(..., min_length=1, max_length=2000)
+    date: Optional[str] = Field(None, max_length=50)
+    avatar: Optional[str] = Field(None, max_length=500)
+    source: Optional[str] = Field(None, max_length=100)
+
+    @field_validator("author", "text", mode="before")
+    @classmethod
+    def strip_str(cls, v: Any) -> Any:
+        return v.strip() if isinstance(v, str) else v
+
+
+# Valid tier keys for team members
+TEAM_TIERS = ["co-founder", "senior-portfolio-manager", "portfolio-manager", "property-investment-consultant", "none"]
+
+DEFAULT_TEAM_SETTINGS = {
+    "id": "team",
+    "tier_order": ["co-founder", "senior-portfolio-manager", "portfolio-manager", "property-investment-consultant"],
+}
+
+
+class TeamMemberIn(BaseModel):
+    name: str
+    role: str
+    tier: Optional[str] = "senior-portfolio-manager"
+    experience: Optional[str] = None
+    speaks: Optional[str] = None
+    photo: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    instagram: Optional[str] = None
+    linkedin: Optional[str] = None
+    facebook: Optional[str] = None
+    bio: Optional[str] = None
+    videoUrl: Optional[str] = None
+    videoUrl2: Optional[str] = None
+    isFounder: Optional[bool] = False
+    showOnHome: Optional[bool] = True
+    showOnAbout: Optional[bool] = True
+    sortOrder: Optional[int] = 0
+
+
+class TeamSettingsIn(BaseModel):
+    tier_order: list = ["senior-portfolio-manager", "portfolio-manager", "property-investment-consultant"]
+
+
+class TeamMemberOut(TeamMemberIn):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+
+
+DEFAULT_HOMEPAGE_SETTINGS = {
+    "id": "homepage",
+    "launch_title": "Why Triad Realty?",
+    "launch_description": (
+        "Renowned for curated UAE launches, sharp market intelligence, and client-first advisory, "
+        "Triad Realty blends developer access with disciplined investment guidance."
+    ),
+    "launch_video_url": "",
+    "stat1_value": "50,000+",
+    "stat1_label": "Homes delivered*",
+    "stat2_value": "54,000+",
+    "stat2_label": "In planning and progress*",
+    "stat3_value": "100+",
+    "stat3_label": "Awards received",
+    "stat4_value": "9",
+    "stat4_label": "Countries",
+    "founders_image_url": "/three_founders.jpg",
+    "team_comes_first": False,
+    "company_address": "Office 1204, Marina Plaza, Dubai Marina, Dubai, UAE",
+    "company_phone": "+971 54 519 3393",
+    "company_email": "info@triadrealityuae.com",
+    "company_whatsapp": "https://wa.me/971545193393?text=Hello%2C%20I%27m%20interested%20in%20a%20property%20consultation.",
+    "company_instagram": "https://www.instagram.com/triadrealty.ae?igsh=MWZpd2pmeTZwMGhzcA==",
+    "company_linkedin": "https://www.linkedin.com/company/triadrealty-ae/",
+}
+
+
+def user_public(u: dict) -> dict:
+    return {
+        "id": u["id"],
+        "email": u["email"],
+        "name": u.get("name"),
+        "role": u["role"],
+        "organization_id": u.get("organization_id"),
+    }
+
+
+# ----------------------------- Startup seed -----------------------------
+async def seed_content():
+    if await db_count("projects") == 0:
+        for p in PROJECTS:
+            await db_insert("projects", dict(p))
+        logger.info("Seeded %d projects", len(PROJECTS))
+
+    # Ensure we always have a full catalog for the Projects page.
+    current_projects = await db_find("projects")
+    if len(current_projects) < TARGET_PROJECT_COUNT:
+        existing_ids = {p.get("id") for p in current_projects if p.get("id")}
+        generated = []
+        idx = 1
+        while len(current_projects) + len(generated) < TARGET_PROJECT_COUNT:
+            base = PROJECTS[(idx - 1) % len(PROJECTS)]
+            gen_id = f"{base['id']}-auto-{idx}"
+            idx += 1
+            if gen_id in existing_ids:
+                continue
+
+            price_base = int(base.get("price_from", 1_000_000))
+            sqft_base = int(base.get("sqft_from", 700))
+            price_factor = 1 + (((idx % 9) - 4) * 0.035)
+            sqft_factor = 1 + (((idx % 7) - 3) * 0.025)
+            tx_price = int(max(300_000, price_base * (0.88 + (idx % 5) * 0.04)))
+
+            generated_doc = {
+                **base,
+                "id": gen_id,
+                "name": f"{base.get('name', 'Project')} {idx}",
+                "price_from": int(max(300_000, price_base * price_factor)),
+                "sqft_from": int(max(350, sqft_base * sqft_factor)),
+                "transactions": [
+                    {"date": "2026-01-14", "unit": "1BR - 720 sqft", "price": tx_price},
+                    {"date": "2026-03-07", "unit": "2BR - 1,080 sqft", "price": int(tx_price * 1.15)},
+                ],
+            }
+            generated.append(generated_doc)
+            existing_ids.add(gen_id)
+
+        for doc in generated:
+            await db_insert("projects", doc)
+        logger.info("Auto-generated %d additional projects (total=%d)", len(generated), len(current_projects) + len(generated))
+
+    if await db_count("blogs") == 0:
+        for b in BLOGS:
+            await db_insert("blogs", dict(b))
+        logger.info("Seeded %d blogs", len(BLOGS))
+    if await db_count("team") == 0:
+        default_team = [
+            {
+                "id": "karan-mehta",
+                "name": "Karan Mehta",
+                "role": "Co-Founder · Managing Director",
+                "photo": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?crop=entropy&cs=srgb&fm=jpg&w=900&q=85",
+                "bio": "Sixteen years across Dubai's primary and resale markets. Karan leads the firm's developer relationships and high-net-worth advisory.",
+                "phone": "+971 54 519 3393",
+                "email": "owner@triad.ae",
+                "instagram": "https://instagram.com/triadrealty",
+                "linkedin": "https://linkedin.com/in/triadrealty",
+                "isFounder": True,
+            },
+            {
+                "id": "ayesha-khan",
+                "name": "Ayesha Khan",
+                "role": "Co-Founder · Head of Investments",
+                "photo": "https://images.unsplash.com/photo-1494790108755-2616c5e38615?crop=entropy&cs=srgb&fm=jpg&w=900&q=85",
+                "bio": "Former equities analyst turned property strategist. Ayesha runs the analytics desk and authors our quarterly market reports.",
+                "phone": "+971 54 519 3393",
+                "email": "ayesha@triadrealty.ae",
+                "instagram": "https://instagram.com/triadrealty",
+                "linkedin": "https://linkedin.com/in/triadrealty",
+                "isFounder": True,
+            },
+            {
+                "id": "rohan-verma",
+                "name": "Rohan Verma",
+                "role": "Co-Founder · Brand & Experience",
+                "photo": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?crop=entropy&cs=srgb&fm=jpg&w=900&q=85",
+                "bio": "Builds the Triad experience — from first call to handover. Believes property consultancy is, fundamentally, a craft.",
+                "phone": "+971 54 519 3393",
+                "email": "rohan@triadrealty.ae",
+                "instagram": "https://instagram.com/triadrealty",
+                "linkedin": "https://linkedin.com/in/triadrealty",
+                "isFounder": True,
+            },
+            {
+                "id": "sarah-al-rashid",
+                "name": "Sarah Al-Rashid",
+                "role": "Senior Investment Consultant",
+                "experience": "4+ years",
+                "speaks": "English, Arabic",
+                "photo": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?crop=entropy&cs=srgb&fm=jpg&w=800&q=85",
+                "phone": "+971 54 519 3393",
+                "email": "sarah@triadrealty.ae",
+                "instagram": "https://instagram.com/triadrealty",
+                "linkedin": "https://linkedin.com/in/triadrealty",
+                "isFounder": False,
+            },
+            {
+                "id": "ahmed-hassan",
+                "name": "Ahmed Hassan",
+                "role": "Investment Consultant",
+                "experience": "3+ years",
+                "speaks": "English, Urdu",
+                "photo": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?crop=entropy&cs=srgb&fm=jpg&w=800&q=85",
+                "phone": "+971 54 519 3393",
+                "email": "ahmed@triadrealty.ae",
+                "instagram": "https://instagram.com/triadrealty",
+                "linkedin": "https://linkedin.com/in/triadrealty",
+                "isFounder": False,
+            },
+            {
+                "id": "fatima-al-zahra",
+                "name": "Fatima Al-Zahra",
+                "role": "Consultant — Family Living",
+                "experience": "4+ years",
+                "speaks": "English, Arabic",
+                "photo": "https://images.unsplash.com/photo-1580489944761-15a19d654956?crop=entropy&cs=srgb&fm=jpg&w=800&q=85",
+                "phone": "+971 54 519 3393",
+                "email": "fatima@triadrealty.ae",
+                "instagram": "https://instagram.com/triadrealty",
+                "linkedin": "https://linkedin.com/in/triadrealty",
+                "isFounder": False,
+            },
+            {
+                "id": "james-mitchell",
+                "name": "James Mitchell",
+                "role": "Consultant — International Desk",
+                "experience": "5+ years",
+                "speaks": "English, French",
+                "photo": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?crop=entropy&cs=srgb&fm=jpg&w=800&q=85",
+                "phone": "+971 54 519 3393",
+                "email": "james@triadrealty.ae",
+                "instagram": "https://instagram.com/triadrealty",
+                "linkedin": "https://linkedin.com/in/triadrealty",
+                "isFounder": False,
+            },
+        ]
+        for member in default_team:
+            await db_insert("team", member)
+        logger.info("Seeded %d default team members and founders", len(default_team))
+    if not await db_find_one("settings", {"id": "launch_popup"}):
+        await db_insert("settings", {
+            "id": "launch_popup",
+            "tag": "New Launch",
+            "title": "Marina Aurora — Pre-Launch",
+            "description": "Exclusive access to Emaar's newest waterfront tower before the public release.",
+            "btn1_label": "View Details",
+            "btn1_link": "/projects/marina-aurora",
+            "btn2_label": "Compare",
+            "btn2_link": "/analysis",
+            "active": True
+        })
+        logger.info("Seeded default launch popup settings")
+    if not await db_find_one("settings", {"id": "homepage"}):
+        await db_insert("settings", dict(DEFAULT_HOMEPAGE_SETTINGS))
+        logger.info("Seeded default homepage settings")
+    if await db_count("experience") == 0:
+        for i, url in enumerate(GALLERY):
+            await db_insert("experience", {
+                "id": f"seed-experience-{i}",
+                "type": "photo",
+                "url": url,
+                "createdAt": now_iso()
+            })
+        logger.info("Seeded %d default experience gallery items", len(GALLERY))
+
+
+
+async def _upsert_default_user(
+    email: str,
+    password: str,
+    role: str,
+    name: str,
+    organization_id: Optional[str],
+    legacy_passwords: tuple[str, ...] = (),
+):
+    existing = await db_find_one("users", {"email": email.strip().lower()})
+    created_at = existing.get("created_at") if existing else now_iso()
+
+    # The password from env configuration is the source of truth for seeded accounts.
+    # If the user exists but the stored hash doesn't match the current configured env password,
+    # we update the stored hash to match it. This prevents the account password from getting
+    # out of sync with the env file.
+    p_hash = existing["password_hash"] if existing else hash_password(password)
+    if existing:
+        if not verify_password(password, p_hash):
+            p_hash = hash_password(password)
+
+    doc = {
+        "email": email.strip().lower(),
+        "password_hash": p_hash,
+        "name": name,
+        "role": role,
+        "organization_id": organization_id,
+        "created_at": created_at,
+    }
+
+    if existing:
+        return await db_update("users", existing["id"], doc)
+
+    doc["id"] = str(uuid.uuid4())
+    await db_insert("users", doc)
+    return doc
+
+
+async def seed_default_users():
+    org = await db_find_one("organizations", {"id": DEFAULT_ORG_ID})
+    if not org:
+        await db_insert(
+            "organizations",
+            {"id": DEFAULT_ORG_ID, "name": "Triad Realty", "created_at": now_iso()},
+        )
+
+    # Clean up the legacy duplicate/typo user from the database if present
+    # to avoid confusion in the admin panel and login issues.
+    await db_delete_many("users", {"email": "onwer@triad.ae"})
+
+    await _upsert_default_user(
+        email=DEVELOPER_EMAIL,
+        password=DEVELOPER_PASSWORD,
+        role=ROLE_DEVELOPER,
+        name="Platform Developer",
+        organization_id=None,
+    )
+    await _upsert_default_user(
+        email=OWNER_EMAIL,
+        password=OWNER_PASSWORD,
+        role=ROLE_OWNER,
+        name="Organization Owner",
+        organization_id=DEFAULT_ORG_ID,
+        legacy_passwords=(LEGACY_OWNER_PASSWORD,),
+    )
+    await _upsert_default_user(
+        email=STAFF_EMAIL,
+        password=STAFF_PASSWORD,
+        role=ROLE_STAFF,
+        name="Staff User",
+        organization_id=DEFAULT_ORG_ID,
+    )
+
+    logger.info("Seeded default admin users (developer/owner/staff)")
+
+
+@app.on_event("startup")
+async def on_startup():
+    global reelly_client
+    environment = os.environ.get("ENVIRONMENT", os.environ.get("APP_ENV", "development")).lower()
+    if environment in {"production", "prod"} and not has_strong_jwt_secret():
+        raise RuntimeError("JWT_SECRET must be set to a strong value in production")
+
+    reelly_client = httpx.AsyncClient(timeout=30.0)
+    await seed_content()
+    await seed_default_users()
+
+
+@app.on_event("shutdown")
+async def shutdown_db_client():
+    global reelly_client
+    if reelly_client:
+        await reelly_client.aclose()
+        reelly_client = None
+    await close_db()
+
+
+# ----------------------------- Auth -----------------------------
+@api_router.post("/auth/login")
+async def login(payload: LoginIn, request: Request):
+    check_rate_limit(request, limit=10, window_sec=60)
+    raw_email = payload.email.strip().lower()
+    # Resolve any known email aliases (e.g. typo variants)
+    lookup_email = EMAIL_ALIASES.get(raw_email, raw_email)
+    user = await db_find_one("users", {"email": lookup_email})
+    # Also try the raw email directly in case alias target doesn't exist
+    if not user and lookup_email != raw_email:
+        user = await db_find_one("users", {"email": raw_email})
+    if not user or not verify_password(payload.password, user["password_hash"]):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    token = create_access_token(user["id"], user["role"], user.get("organization_id"))
+    att_id = str(uuid.uuid4())
+    await db_insert(
+        "attendance",
+        {
+            "id": att_id,
+            "user_id": user["id"],
+            "organization_id": user.get("organization_id"),
+            "login_at": now_iso(),
+            "logout_at": None,
+        },
+    )
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": user_public(user),
+        "attendance_id": att_id,
+    }
+
+
+@api_router.post("/auth/logout")
+async def logout(user=Depends(get_current_user)):
+    records = await db_find("attendance", {"user_id": user["id"], "logout_at": None})
+    for rec in records:
+        await db_update("attendance", rec["id"], {"logout_at": now_iso()})
+    return {"detail": "Logged out"}
+
+
+@api_router.get("/auth/me")
+async def auth_me(user=Depends(get_current_user)):
+    return user_public(user)
+
+
+# ----------------------------- Developer: owners & orgs -----------------------------
+@api_router.post("/admin/owners")
+async def create_owner(payload: OwnerCreate, _=Depends(require_developer)):
+    existing = await db_find_one("users", {"email": payload.email.lower()})
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    org_id = str(uuid.uuid4())
+    await db_insert(
+        "organizations",
+        {"id": org_id, "name": payload.organization_name, "created_at": now_iso()},
+    )
+    user_id = str(uuid.uuid4())
+    doc = {
+        "id": user_id,
+        "email": payload.email.lower(),
+        "password_hash": hash_password(payload.password),
+        "name": payload.name,
+        "role": ROLE_OWNER,
+        "organization_id": org_id,
+        "created_at": now_iso(),
+    }
+    await db_insert("users", doc)
+    return {"user": user_public(doc), "organization": {"id": org_id, "name": payload.organization_name}}
+
+
+@api_router.get("/admin/owners")
+async def list_owners(_=Depends(require_developer)):
+    owners = await db_find("users", {"role": ROLE_OWNER})
+    orgs = {o["id"]: o for o in await db_find("organizations")}
+    results = []
+    for o in owners:
+        org = orgs.get(o.get("organization_id"), {})
+        results.append({**user_public(o), "organization_name": org.get("name")})
+    return {"count": len(results), "results": results}
+
+
+@api_router.patch("/admin/organizations/{org_id}")
+async def patch_organization(org_id: str, payload: OrgPatch, _=Depends(require_developer)):
+    org = await db_find_one("organizations", {"id": org_id})
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    updates = payload.model_dump(exclude_unset=True)
+    if updates:
+        await db_update("organizations", org_id, updates)
+    return await db_find_one("organizations", {"id": org_id})
+
+
+@api_router.get("/admin/organizations")
+async def list_organizations(_=Depends(require_developer)):
+    items = await db_find("organizations")
+    return {"count": len(items), "results": items}
+
+
+@api_router.patch("/admin/owners/{owner_id}")
+async def patch_owner(owner_id: str, payload: OwnerPatch, _=Depends(require_developer)):
+    owner = await db_find_one("users", {"id": owner_id, "role": ROLE_OWNER})
+    if not owner:
+        raise HTTPException(status_code=404, detail="Owner not found")
+    
+    updates = {}
+    if payload.name is not None:
+        updates["name"] = payload.name
+    if payload.email is not None:
+        email_lower = payload.email.lower()
+        existing = await db_find_one("users", {"email": email_lower})
+        if existing and existing["id"] != owner_id:
+            raise HTTPException(status_code=400, detail="Email already registered")
+        updates["email"] = email_lower
+    if payload.password is not None:
+        updates["password_hash"] = hash_password(payload.password)
+        
+    if updates:
+        await db_update("users", owner_id, updates)
+        
+    if payload.organization_name is not None and owner.get("organization_id"):
+        await db_update("organizations", owner["organization_id"], {"name": payload.organization_name})
+        
+    updated_owner = await db_find_one("users", {"id": owner_id})
+    org = await db_find_one("organizations", {"id": updated_owner.get("organization_id")})
+    return {"user": user_public(updated_owner), "organization_name": org.get("name") if org else None}
+
+
+@api_router.delete("/admin/owners/{owner_id}")
+async def delete_owner(owner_id: str, _=Depends(require_developer)):
+    owner = await db_find_one("users", {"id": owner_id, "role": ROLE_OWNER})
+    if not owner:
+        raise HTTPException(status_code=404, detail="Owner not found")
+    
+    if owner.get("organization_id"):
+        await db_delete("organizations", owner["organization_id"])
+        
+    await db_delete("users", owner_id)
+    return {"detail": "Owner and organization deleted"}
+
+
+# ----------------------------- Owner: staff -----------------------------
+@api_router.post("/admin/staff")
+async def create_staff(payload: UserCreate, user=Depends(require_owner)):
+    existing = await db_find_one("users", {"email": payload.email.lower()})
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    doc = {
+        "id": str(uuid.uuid4()),
+        "email": payload.email.lower(),
+        "password_hash": hash_password(payload.password),
+        "name": payload.name,
+        "role": ROLE_STAFF,
+        "organization_id": user["organization_id"],
+        "created_at": now_iso(),
+    }
+    await db_insert("users", doc)
+    return user_public(doc)
+
+
+@api_router.get("/admin/staff")
+async def list_staff(user=Depends(require_owner)):
+    items = await db_find("users", {"role": ROLE_STAFF, "organization_id": user["organization_id"]})
+    return {"count": len(items), "results": [user_public(u) for u in items]}
+
+
+@api_router.delete("/admin/staff/{staff_id}")
+async def delete_staff(staff_id: str, user=Depends(require_owner)):
+    staff = await db_find_one("users", {"id": staff_id, "role": ROLE_STAFF})
+    if not staff or staff.get("organization_id") != user["organization_id"]:
+        raise HTTPException(status_code=404, detail="Staff not found")
+    await db_delete("users", staff_id)
+    return {"detail": "Deleted"}
+
+
+@api_router.patch("/admin/staff/{staff_id}")
+async def patch_staff(staff_id: str, payload: StaffPatch, user=Depends(require_owner)):
+    staff = await db_find_one("users", {"id": staff_id, "role": ROLE_STAFF})
+    if not staff or staff.get("organization_id") != user["organization_id"]:
+        raise HTTPException(status_code=404, detail="Staff not found")
+        
+    updates = {}
+    if payload.name is not None:
+        updates["name"] = payload.name
+    if payload.email is not None:
+        email_lower = payload.email.lower()
+        existing = await db_find_one("users", {"email": email_lower})
+        if existing and existing["id"] != staff_id:
+            raise HTTPException(status_code=400, detail="Email already registered")
+        updates["email"] = email_lower
+    if payload.password is not None:
+        updates["password_hash"] = hash_password(payload.password)
+        
+    if updates:
+        await db_update("users", staff_id, updates)
+        
+    updated_staff = await db_find_one("users", {"id": staff_id})
+    return user_public(updated_staff)
+
+
+# ----------------------------- Attendance -----------------------------
+@api_router.get("/admin/attendance")
+async def attendance_dashboard(user=Depends(require_owner)):
+    org_id = user["organization_id"]
+    staff = await db_find("users", {"role": ROLE_STAFF, "organization_id": org_id})
+    staff_ids = {s["id"] for s in staff}
+    records = await db_find("attendance")
+    org_records = [r for r in records if r.get("user_id") in staff_ids or r.get("organization_id") == org_id]
+    return {"count": len(org_records), "results": org_records}
+
+
+# ----------------------------- Leads (protected) -----------------------------
+@api_router.get("/admin/leads")
+async def admin_list_leads(user=Depends(require_staff_or_owner)):
+    if user["role"] == ROLE_STAFF:
+        items = await db_find("leads", {"assigned_to": user["id"]})
+    else:
+        items = await db_find("leads", {"organization_id": user["organization_id"]})
+    return {"count": len(items), "results": items}
+
+
+@api_router.patch("/admin/leads/{lead_id}")
+async def admin_patch_lead(lead_id: str, payload: LeadPatch, user=Depends(require_staff_or_owner)):
+    lead = await db_find_one("leads", {"id": lead_id})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    if user["role"] == ROLE_STAFF:
+        if lead.get("assigned_to") != user["id"]:
+            raise HTTPException(status_code=403, detail="Not your lead")
+    elif lead.get("organization_id") != user["organization_id"]:
+        raise HTTPException(status_code=403, detail="Not in your organization")
+    updates = payload.model_dump(exclude_unset=True)
+    updates["updated_at"] = now_iso()
+    updated = await db_update("leads", lead_id, updates)
+    return updated
+
+
+@api_router.delete("/admin/leads")
+async def admin_clear_leads(user=Depends(require_owner)):
+    await db_delete_many("leads", {"organization_id": user["organization_id"]})
+    return {"detail": "All leads cleared"}
+
+
+@api_router.get("/leads")
+async def list_leads(_=Depends(require_owner_or_developer)):
+    items = await db_find("leads")
+    return {"count": len(items), "results": items}
+
+
+@api_router.get("/contacts")
+async def list_contacts(_=Depends(require_owner_or_developer)):
+    items = await db_find("contacts")
+    return {"count": len(items), "results": items}
+
+
+@api_router.get("/applications")
+async def list_applications(_=Depends(require_owner_or_developer)):
+    items = await db_find("applications")
+    return {"count": len(items), "results": items}
+
+
+# ----------------------------- Public POST (rate limited) -----------------------------
+@api_router.post("/leads", response_model=Lead)
+async def create_lead(payload: LeadIn, request: Request):
+    check_rate_limit(request)
+    lead = Lead(**payload.model_dump())
+    await db_insert("leads", lead.model_dump())
+    return lead
+
+
+@api_router.post("/contacts", response_model=Contact)
+async def create_contact(payload: ContactIn, request: Request):
+    check_rate_limit(request)
+    c = Contact(**payload.model_dump())
+    await db_insert("contacts", c.model_dump())
+    return c
+
+
+@api_router.post("/applications", response_model=Application)
+async def create_application(payload: ApplicationIn, request: Request):
+    check_rate_limit(request)
+    a = Application(**payload.model_dump())
+    await db_insert("applications", a.model_dump())
+    return a
+
+
+# ----------------------------- Projects / blogs (public read, DB) -----------------------------
+def filter_projects(
+    items: list,
+    emirate: Optional[str] = None,
+    location: Optional[str] = None,
+    type: Optional[str] = None,
+    min_price: Optional[int] = None,
+    max_price: Optional[int] = None,
+    configuration: Optional[str] = None,
+    hot: Optional[bool] = None,
+    q: Optional[str] = None,
+):
+    results = items
+    if emirate:
+        results = [p for p in results if p["emirate"].lower() == emirate.lower()]
+    if location:
+        results = [p for p in results if location.lower() in p["location"].lower()]
+    if type:
+        results = [p for p in results if p["type"].lower() == type.lower()]
+    if min_price is not None:
+        results = [p for p in results if p["price_from"] >= min_price]
+    if max_price is not None:
+        results = [p for p in results if p["price_from"] <= max_price]
+    if configuration:
+        config_upper = configuration.upper()
+        results = [
+            p
+            for p in results
+            if config_upper in [c.upper() for c in p["configuration"]]
+        ]
+    if hot is not None:
+        results = [p for p in results if p["hot"] == hot]
+    if q:
+        ql = q.lower()
+        results = [
+            p
+            for p in results
+            if ql in p["name"].lower()
+            or ql in p["description"].lower()
+            or ql in p["location"].lower()
+        ]
+    return results
+
+
+@api_router.get("/")
+async def root():
+    return {"service": "Triad Realty API", "status": "ok"}
+
+
+@api_router.get("/settings/popup")
+async def get_popup_settings():
+    s = await db_find_one("settings", {"id": "launch_popup"})
+    if not s:
+        return {
+            "id": "launch_popup",
+            "tag": "New Launch",
+            "title": "Marina Aurora — Pre-Launch",
+            "description": "Exclusive access to Emaar's newest waterfront tower before the public release.",
+            "btn1_label": "View Details",
+            "btn1_link": "/projects/marina-aurora",
+            "btn2_label": "Compare",
+            "btn2_link": "/analysis",
+            "active": True
+        }
+    return s
+
+
+@api_router.get("/settings/homepage")
+async def get_homepage_settings():
+    s = await db_find_one("settings", {"id": "homepage"})
+    if not s:
+        return DEFAULT_HOMEPAGE_SETTINGS
+    return {**DEFAULT_HOMEPAGE_SETTINGS, **s}
+
+
+@api_router.get("/settings/team")
+async def get_team_settings():
+    s = await db_find_one("settings", {"id": "team"})
+    if not s:
+        return DEFAULT_TEAM_SETTINGS
+    return {**DEFAULT_TEAM_SETTINGS, **s}
+
+
+@api_router.get("/projects")
+async def list_projects(
+    emirate: Optional[str] = None,
+    location: Optional[str] = None,
+    type: Optional[str] = None,
+    min_price: Optional[int] = None,
+    max_price: Optional[int] = None,
+    configuration: Optional[str] = None,
+    hot: Optional[bool] = None,
+    q: Optional[str] = None,
+    page: int = 1,
+    per_page: int = 0,
+):
+    items = await db_find("projects")
+    results = filter_projects(items, emirate, location, type, min_price, max_price, configuration, hot, q)
+    total = len(results)
+    if per_page > 0:
+        start = max(0, (page - 1) * per_page)
+        end = start + per_page
+        results = results[start:end]
+    return {"count": total, "results": results}
+
+
+@api_router.get("/projects/{project_id}")
+async def get_project(project_id: str):
+    p = await db_find_one("projects", {"id": project_id})
+    if not p:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return p
+
+
+@api_router.get("/blogs")
+async def list_blogs():
+    items = await db_find("blogs")
+    return {"count": len(items), "results": items}
+
+
+@api_router.get("/blogs/{blog_id}")
+async def get_blog(blog_id: str):
+    b = await db_find_one("blogs", {"id": blog_id})
+    if not b:
+        raise HTTPException(status_code=404, detail="Blog not found")
+    return b
+
+
+@api_router.get("/careers")
+async def list_careers():
+    return {"count": len(CAREERS), "results": CAREERS}
+
+
+@api_router.get("/reviews")
+async def list_reviews():
+    items = await db_find("reviews")
+    return {"count": len(items), "results": items}
+
+
+@api_router.get("/experience")
+async def list_experience():
+    items = await db_find("experience")
+    return {"count": len(items), "results": items}
+
+
+# ----------------------------- Admin CMS: projects & blogs (developer) -----------------------------
+@api_router.get("/admin/projects")
+async def admin_list_projects(_=Depends(require_developer)):
+    items = await db_find("projects")
+    return {"count": len(items), "results": items}
+
+
+@api_router.post("/admin/projects")
+async def admin_create_project(payload: ProjectIn, _=Depends(require_developer)):
+    doc = payload.model_dump(exclude_none=True)
+    if not doc.get("id"):
+        doc["id"] = str(uuid.uuid4())
+    await db_insert("projects", doc)
+    return doc
+
+
+@api_router.patch("/admin/projects/{project_id}")
+async def admin_update_project(project_id: str, payload: ProjectIn, _=Depends(require_developer)):
+    p = await db_find_one("projects", {"id": project_id})
+    if not p:
+        raise HTTPException(status_code=404, detail="Project not found")
+    updates = payload.model_dump(exclude_none=True)
+    updates.pop("id", None)
+    return await db_update("projects", project_id, updates)
+
+
+@api_router.delete("/admin/projects/{project_id}")
+async def admin_delete_project(project_id: str, _=Depends(require_developer)):
+    await db_delete("projects", project_id)
+    return {"detail": "Deleted"}
+
+
+@api_router.get("/admin/blogs")
+async def admin_list_blogs(_=Depends(require_developer)):
+    items = await db_find("blogs")
+    return {"count": len(items), "results": items}
+
+
+@api_router.post("/admin/blogs")
+async def admin_create_blog(payload: BlogIn, _=Depends(require_developer)):
+    doc = payload.model_dump(exclude_none=True)
+    if not doc.get("id"):
+        doc["id"] = str(uuid.uuid4())
+    await db_insert("blogs", doc)
+    return doc
+
+
+@api_router.patch("/admin/blogs/{blog_id}")
+async def admin_update_blog(blog_id: str, payload: BlogIn, _=Depends(require_developer)):
+    b = await db_find_one("blogs", {"id": blog_id})
+    if not b:
+        raise HTTPException(status_code=404, detail="Blog not found")
+    updates = payload.model_dump(exclude_none=True)
+    updates.pop("id", None)
+    return await db_update("blogs", blog_id, updates)
+
+
+@api_router.delete("/admin/blogs/{blog_id}")
+async def admin_delete_blog(blog_id: str, _=Depends(require_developer)):
+    await db_delete("blogs", blog_id)
+    return {"detail": "Deleted"}
+
+
+# ----------------------------- Admin CMS: Reviews (developer) -----------------------------
+@api_router.post("/admin/reviews")
+async def admin_create_review(payload: ReviewIn, _=Depends(require_developer)):
+    doc = payload.model_dump(exclude_none=True)
+    if not doc.get("id"):
+        doc["id"] = str(uuid.uuid4())
+    doc["createdAt"] = now_iso()
+    await db_insert("reviews", doc)
+    return doc
+
+
+@api_router.delete("/admin/reviews/{review_id}")
+async def admin_delete_review(review_id: str, _=Depends(require_developer)):
+    await db_delete("reviews", review_id)
+    return {"detail": "Deleted"}
+
+
+# ─── Allowed upload MIME types and extensions ────────────────────────────────
+_ALLOWED_UPLOAD_MIMES = {
+    "image/jpeg", "image/png", "image/gif", "image/webp",
+    "image/svg+xml", "application/pdf",
+}
+_ALLOWED_UPLOAD_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".pdf"}
+_MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
+
+
+# ----------------------------- Admin CMS: Experience (owner or developer) -----------------------------
+class ExperienceIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: Optional[str] = Field(None, max_length=150)
+    type: Optional[str] = Field("photo", max_length=20)
+    url: str = Field(..., max_length=500)
+
+
+@api_router.post("/admin/experience")
+async def admin_create_experience(payload: ExperienceIn, _=Depends(require_owner_or_developer)):
+    doc = payload.model_dump(exclude_none=True)
+    if not doc.get("id"):
+        doc["id"] = str(uuid.uuid4())
+    doc["createdAt"] = now_iso()
+    await db_insert("experience", doc)
+    return doc
+
+
+@api_router.delete("/admin/experience/{experience_id}")
+async def admin_delete_experience(experience_id: str, _=Depends(require_owner_or_developer)):
+    await db_delete("experience", experience_id)
+    return {"detail": "Deleted"}
+
+
+@api_router.get("/admin/system/health")
+async def system_health(_=Depends(require_developer)):
+    now = datetime.now(timezone.utc)
+    uptime_seconds = int((now - _server_start_time).total_seconds())
+    uptime_hours   = uptime_seconds // 3600
+    uptime_minutes = (uptime_seconds % 3600) // 60
+    uptime_str = f"{uptime_hours}h {uptime_minutes}m" if uptime_hours else f"{uptime_minutes}m"
+
+    # Fetch recent leads (last 10)
+    all_leads = await db_find("leads")
+    all_leads_sorted = sorted(all_leads, key=lambda l: l.get("created_at", ""), reverse=True)
+    recent_leads = [
+        {
+            "name":    l.get("name", ""),
+            "email":   l.get("email", ""),
+            "phone":   l.get("phone", ""),
+            "asset":   l.get("asset", ""),
+            "source":  l.get("source_page", ""),
+            "created_at": l.get("created_at", ""),
+        }
+        for l in all_leads_sorted[:10]
+    ]
+
+    # Environment / config checks
+    checks = {
+        "jwt_secret_strong":  has_strong_jwt_secret(),
+        "reelly_api_key_set": bool(REELLY_API_KEY),
+        "database":           "mongodb" if USE_MONGO else "in-memory",
+        "mongo_uri_set":      bool(os.environ.get("MONGODB_URI")),
+        "sendgrid_key_set":   bool(os.environ.get("SENDGRID_API_KEY")),
+    }
+
+    return {
+        "status":      "ok",
+        "uptime":      uptime_str,
+        "uptime_seconds": uptime_seconds,
+        "server_started": _server_start_time.isoformat(),
+        "timestamp":   now.isoformat(),
+        "database":    "mongodb" if USE_MONGO else "in-memory",
+        "counts": {
+            "projects": await db_count("projects"),
+            "blogs":    await db_count("blogs"),
+            "users":    await db_count("users"),
+            "leads":    await db_count("leads"),
+            "reviews":  await db_count("reviews"),
+            "team":     await db_count("team"),
+        },
+        # legacy keys kept for existing sidebar usage
+        "projects":    await db_count("projects"),
+        "users":       await db_count("users"),
+        "leads":       await db_count("leads"),
+        "checks":      checks,
+        "recent_leads": recent_leads,
+    }
+
+
+# ----------------------------- Team (public read, developer CRUD) -----------------------------
+@api_router.get("/team")
+async def list_team():
+    items = await db_find("team")
+    for item in items:
+        if "showOnHome" not in item:
+            item["showOnHome"] = True
+        if "showOnAbout" not in item:
+            item["showOnAbout"] = True
+        if "sortOrder" not in item:
+            item["sortOrder"] = 0
+    return {"count": len(items), "results": items}
+
+
+@api_router.get("/team/{member_id}")
+async def get_team_member(member_id: str):
+    item = await db_find_one("team", {"id": member_id})
+    if not item:
+        raise HTTPException(status_code=404, detail="Team member not found")
+    if "showOnHome" not in item:
+        item["showOnHome"] = True
+    if "showOnAbout" not in item:
+        item["showOnAbout"] = True
+    if "sortOrder" not in item:
+        item["sortOrder"] = 0
+    return item
+
+
+@api_router.post("/team")
+async def create_team_member(payload: TeamMemberIn, _=Depends(require_developer)):
+    member = TeamMemberOut(**payload.model_dump())
+    await db_insert("team", member.model_dump())
+    return member
+
+
+@api_router.put("/team/{member_id}")
+async def update_team_member(member_id: str, payload: TeamMemberIn, _=Depends(require_developer)):
+    updated = await db_update("team", member_id, payload.model_dump())
+    if not updated:
+        raise HTTPException(status_code=404, detail="Team member not found")
+    return updated
+
+
+@api_router.delete("/team/{member_id}")
+async def delete_team_member(member_id: str, _=Depends(require_developer)):
+    await db_delete("team", member_id)
+    return {"detail": "Deleted"}
+
+
+# ----------------------------- Reelly proxy -----------------------------
+async def _reelly_request(path: str, params: Optional[dict] = None):
+    global reelly_client
+    if not REELLY_API_KEY:
+        raise HTTPException(status_code=503, detail="External listings API not configured")
+    url = f"{REELLY_BASE.rstrip('/')}/{path.lstrip('/')}"
+    if reelly_client is None:
+        reelly_client = httpx.AsyncClient(timeout=30.0)
+
+    try:
+        r = await reelly_client.get(
+            url,
+            params=params,
+            headers={"X-API-Key": REELLY_API_KEY, "accept": "application/json"},
+        )
+    except httpx.HTTPError as exc:
+        logger.warning("External API request failed: %s", exc)
+        raise HTTPException(status_code=502, detail="External API unavailable") from exc
+
+    if r.status_code >= 400:
+        raise HTTPException(status_code=r.status_code, detail="External API error")
+    return r.json()
+
+
+@api_router.get("/external/properties")
+async def proxy_properties(
+    page: int = 1,
+    per_page: int = 50,
+    has_escrow: bool = True,
+    price_type: str = "area",
+):
+    return await _reelly_request(
+        "properties",
+        {"page": page, "per_page": per_page, "has_escrow": has_escrow, "price_type": price_type},
+    )
+
+
+@api_router.get("/external/properties/{property_id}")
+async def proxy_property_detail(property_id: str):
+    return await _reelly_request(f"properties/{property_id}")
+
+
+@api_router.get("/external/property-markers")
+async def proxy_property_markers():
+    return await _reelly_request("property-markers")
+
+
+@api_router.get("/external/areas")
+async def proxy_areas():
+    return await _reelly_request("areas")
+
+
+@api_router.get("/external/unit-bedrooms")
+async def proxy_unit_bedrooms():
+    return await _reelly_request("unit-bedrooms")
+
+
+@api_router.get("/external/sale-statuses")
+async def proxy_sale_statuses():
+    return await _reelly_request("sale-statuses")
+
+
+# ----------------------------- External → DB sync -----------------------------
+def _normalize_reelly_project(item: dict) -> dict:
+    """Map a Reelly API property object to the internal project schema."""
+    import re
+
+    def fmt_price(val):
+        try:
+            return f"AED {int(float(val)):,}"
+        except Exception:
+            return "Contact for price"
+
+    price_from = int(float(item.get("min_price_aed") or item.get("price_from") or 0))
+    sqft_from = int(float(item.get("min_area_sqft") or item.get("sqft_from") or 0))
+    name = item.get("name") or item.get("title") or "Unnamed"
+    developer = item.get("developer") or item.get("developer_name") or ""
+    location = item.get("area") or item.get("location") or ""
+    city = item.get("city") or "Dubai"
+
+    # Derive a stable slug id from the Reelly id or name
+    raw_id = str(item.get("id") or re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-"))
+    project_id = f"ext-{raw_id}"
+
+    completion = item.get("completion_datetime") or item.get("handover") or ""
+    if completion and "T" in completion:
+        try:
+            from datetime import datetime
+            dt = datetime.fromisoformat(completion.replace("Z", "+00:00"))
+            completion = dt.strftime("Q%-m %Y")
+        except Exception:
+            pass
+
+    beds_raw = item.get("unit_bedrooms") or item.get("bedrooms") or ""
+    configs = [b.strip() for b in str(beds_raw).split(",") if b.strip()] if beds_raw else []
+
+    cover = item.get("cover_image_url") or item.get("hero") or ""
+    gallery = item.get("gallery") or []
+    if isinstance(gallery, str):
+        gallery = [gallery]
+
+    return {
+        "id": project_id,
+        "name": name,
+        "developer": developer,
+        "location": location,
+        "emirate": city,
+        "type": item.get("property_type") or "Apartment",
+        "configuration": configs,
+        "price_from": price_from,
+        "price_currency": "AED",
+        "sqft_from": sqft_from,
+        "handover": completion,
+        "status": item.get("sale_status") or "Off-Plan",
+        "hot": bool(item.get("is_partner_project") or item.get("hot")),
+        "tagline": f"Premium {(item.get('property_type') or 'property').lower()} in {location}.",
+        "hero": cover,
+        "gallery": gallery[:4],
+        "amenities": ["Swimming Pool", "Gymnasium", "Concierge", "Covered Parking"],
+        "payment_plan": [
+            {"milestone": "Booking", "percent": 10},
+            {"milestone": "Construction", "percent": 50},
+            {"milestone": "Handover", "percent": 40},
+        ],
+        "floor_plan": "",
+        "map_image": "",
+        "transactions": [],
+        "description": f"{name} by {developer} in {location}, {city}. {item.get('has_escrow') and 'Escrow protected.' or ''} Handover {completion}.",
+        "source": "reelly",
+    }
+
+
+@api_router.post("/admin/sync-external-projects")
+async def sync_external_projects(_=Depends(require_developer)):
+    """Fetch all pages from the Reelly API and upsert them into the projects collection."""
+    if not REELLY_API_KEY:
+        raise HTTPException(status_code=503, detail="REELLY_API_KEY not set")
+
+    page = 1
+    per_page = 50
+    total_synced = 0
+    total_updated = 0
+
+    while True:
+        data = await _reelly_request(
+            "properties",
+            {"page": page, "per_page": per_page, "has_escrow": True, "price_type": "area"},
+        )
+        items = data.get("items") or []
+        if not items:
+            break
+
+        for item in items:
+            doc = _normalize_reelly_project(item)
+            existing = await db_find_one("projects", {"id": doc["id"]})
+            if existing:
+                await db_update("projects", doc["id"], doc)
+                total_updated += 1
+            else:
+                await db_insert("projects", doc)
+                total_synced += 1
+
+        pagination = data.get("pagination") or {}
+        if not pagination.get("has_next"):
+            break
+        page += 1
+
+    return {
+        "detail": "Sync complete",
+        "inserted": total_synced,
+        "updated": total_updated,
+        "total": total_synced + total_updated,
+    }
+
+
+@api_router.get("/admin/preview-external-projects")
+async def preview_external_projects(page: int = 1, per_page: int = 10, _=Depends(require_developer)):
+    """Preview external Reelly listings without saving to DB."""
+    if not REELLY_API_KEY:
+        raise HTTPException(status_code=503, detail="REELLY_API_KEY not set")
+    data = await _reelly_request(
+        "properties",
+        {"page": page, "per_page": per_page, "has_escrow": True, "price_type": "area"},
+    )
+    items = [_normalize_reelly_project(i) for i in (data.get("items") or [])]
+    return {"count": len(items), "pagination": data.get("pagination"), "results": items}
+
+
+
+@api_router.put("/admin/settings/popup")
+async def update_popup_settings(payload: PopupSettingsIn, _=Depends(require_developer)):
+    s = await db_find_one("settings", {"id": "launch_popup"})
+    if not s:
+        doc = {"id": "launch_popup", **payload.model_dump()}
+        await db_insert("settings", doc)
+        return doc
+    updates = payload.model_dump()
+    return await db_update("settings", "launch_popup", updates)
+
+
+@api_router.put("/admin/settings/homepage")
+async def update_homepage_settings(payload: HomepageSettingsIn, _=Depends(require_developer)):
+    s = await db_find_one("settings", {"id": "homepage"})
+    if not s:
+        doc = {"id": "homepage", **payload.model_dump()}
+        await db_insert("settings", doc)
+        return doc
+    updates = payload.model_dump()
+    return await db_update("settings", "homepage", updates)
+
+
+@api_router.put("/admin/settings/team")
+async def update_team_settings(payload: TeamSettingsIn, _=Depends(require_developer)):
+    # Validate tier order contains only known tiers
+    for t in payload.tier_order:
+        if t not in TEAM_TIERS:
+            raise HTTPException(status_code=400, detail=f"Unknown tier: {t}")
+    s = await db_find_one("settings", {"id": "team"})
+    if not s:
+        doc = {"id": "team", **payload.model_dump()}
+        await db_insert("settings", doc)
+        return doc
+    return await db_update("settings", "team", payload.model_dump())
+
+
+@api_router.post("/upload")
+async def upload_file(file: UploadFile = File(...), _=Depends(require_owner_or_developer)):
+    import shutil
+
+    # ── Validate content type ──────────────────────────────────────────────
+    content_type = (file.content_type or "").split(";")[0].strip().lower()
+    if content_type not in _ALLOWED_UPLOAD_MIMES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File type '{content_type}' is not allowed. Permitted types: images (jpg/png/gif/webp/svg) and PDF.",
+        )
+
+    # ── Validate file extension ────────────────────────────────────────────
+    original_name = file.filename or "upload"
+    ext = os.path.splitext(original_name)[1].lower()
+    if ext not in _ALLOWED_UPLOAD_EXTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File extension '{ext}' is not allowed.",
+        )
+
+    # ── Read & size-check ──────────────────────────────────────────────────
+    data = await file.read()
+    if len(data) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File exceeds the maximum allowed size of {_MAX_UPLOAD_BYTES // (1024 * 1024)} MB.",
+        )
+
+    # ── Save with a random prefix to prevent collisions ───────────────────
+    safe_name = f"{uuid.uuid4()}{ext}"
+    file_path = os.path.join(_uploads_dir, safe_name)
+    with open(file_path, "wb") as buffer:
+        buffer.write(data)
+
+    return {"url": f"/uploads/{safe_name}"}
+
+
+app.include_router(api_router)
+
+# ----------------------------- Serve Static Frontend -----------------------------
+frontend_path = os.path.join(os.path.dirname(__file__), "frontend_build")
+
+# Mount /static only when the build folder exists (guards against startup crash).
+# The folder is created during the Render build step via `cp -r build ../backend/frontend_build`.
+_static_dir = os.path.join(frontend_path, "static")
+if os.path.isdir(_static_dir):
+    app.mount("/static", StaticFiles(directory=_static_dir), name="static")
+
+app.mount("/uploads", StaticFiles(directory=_uploads_dir), name="uploads")
+
+
+# Catch-all: ALWAYS registered so React Router paths (/projects, /about, …)
+# never return a FastAPI 404. Non-API requests fall through to index.html.
+@app.get("/{full_path:path}")
+async def serve_react(full_path: str):
+    # Let /api/* routes surface their own 404 from FastAPI
+    if full_path.startswith("api") or full_path.startswith("api/"):
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    index_file = os.path.join(frontend_path, "index.html")
+    if not os.path.isfile(index_file):
+        raise HTTPException(
+            status_code=503,
+            detail="Frontend not built yet — run `npm run build` and copy to backend/frontend_build"
+        )
+
+    # Serve a specific file if it exists (e.g. favicon.ico, manifest.json)
+    requested_file = os.path.join(frontend_path, full_path)
+    if full_path and os.path.isfile(requested_file):
+        return FileResponse(requested_file)
+
+    # All other paths → hand off to React Router
+    return FileResponse(index_file)

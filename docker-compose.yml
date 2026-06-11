@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: triad-app
+    ports:
+      - "8000:8000"
+    environment:
+      - MONGO_URL=mongodb://mongodb:27017/triad_realty
+      - DB_NAME=triad_realty
+      - DEVELOPER_PASSWORD=developer123  # Change to a strong password in production
+      - OWNER_PASSWORD=owner123          # Change to a strong password in production
+      - STAFF_PASSWORD=staff123          # Change to a strong password in production
+      - JWT_SECRET=supersecretjwtkey1234567890!change_me  # Change in production
+    volumes:
+      - uploads_data:/app/backend/uploads
+    depends_on:
+      - mongodb
+    restart: always
+
+  mongodb:
+    image: mongo:6.0
+    container_name: triad-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    restart: always
+
+volumes:
+  mongo_data:
+  uploads_data:
