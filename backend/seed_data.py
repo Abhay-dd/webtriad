@@ -10,8 +10,6 @@ _HERO_IMGS = [
     "https://images.unsplash.com/photo-1709153880759-ed27e0590618?crop=entropy&cs=srgb&fm=jpg&q=85",
     "https://images.unsplash.com/photo-1715985160053-d339e8b6eb94?crop=entropy&cs=srgb&fm=jpg&q=85",
 ]
-_FLOOR = "https://images.unsplash.com/photo-1503387762-592deb58ef4e?crop=entropy&cs=srgb&fm=jpg&q=85"
-_MAP   = "https://images.unsplash.com/photo-1524661135-423995f22d0b?crop=entropy&cs=srgb&fm=jpg&q=85"
 
 _RAW = [
     # id, name, developer, location, emirate, type, configs, price_from, sqft_from, handover, hot
@@ -117,24 +115,11 @@ _RAW = [
     ("jbr-la-mer","La Mer South","Meraas","La Mer","Dubai","Apartment",["1BR","2BR","3BR"],2200000,800,"Q2 2028",True),
 ]
 
-def _pp(bk, con, ho):
-    return [
-        {"milestone": "Booking", "percent": bk},
-        {"milestone": "Construction", "percent": con},
-        {"milestone": "Handover", "percent": ho},
-    ]
-
-def _txn(price):
-    return [
-        {"date": "2024-11-15", "unit": f"Latest — {int(price*0.0004):,} sqft", "price": price},
-        {"date": "2024-08-20", "unit": f"Earlier — {int(price*0.0003):,} sqft", "price": int(price * 0.85)},
-    ]
 
 PROJECTS = []
 for i, row in enumerate(_RAW):
     pid, name, dev, loc, emir, typ, cfgs, pf, sqft, ho, hot = row
     img = _HERO_IMGS[i % len(_HERO_IMGS)]
-    bk = 10 if pf < 5000000 else 20
     PROJECTS.append({
         "id": pid,
         "name": name,
@@ -151,12 +136,13 @@ for i, row in enumerate(_RAW):
         "hot": hot,
         "tagline": f"Premium {typ.lower()} living in {loc}.",
         "hero": img,
-        "gallery": [_HERO_IMGS[(i+1) % len(_HERO_IMGS)], _HERO_IMGS[(i+2) % len(_HERO_IMGS)]],
-        "amenities": ["Swimming Pool", "Gymnasium", "Concierge", "Smart Home", "Covered Parking", "Children's Play Area"],
-        "payment_plan": _pp(bk, 100 - bk - 40, 40),
-        "floor_plan": _FLOOR,
-        "map_image": _MAP,
-        "transactions": _txn(pf),
+        # Intentionally empty — admin must provide real content before these sections appear
+        "gallery": [],
+        "amenities": [],
+        "payment_plan": [],
+        "floor_plan": "",
+        "map_image": "",
+        "transactions": [],
         "description": f"{name} by {dev} offers exceptional {typ.lower()} units in {loc}, {emir}. Handover {ho} with flexible payment plans.",
     })
 

@@ -1,39 +1,35 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import axios from "axios";
 import { Download, MapPin, Phone, Mail, ArrowLeft, ChevronRight } from "lucide-react";
-import BrochureModal from "../components/BrochureModal";
 import { API_URL as API, resolveMediaUrl } from "../config";
-
-const SECTIONS = ["Details", "Gallery", "Floor Plan", "Amenities", "Location", "Payment Plan", "Comparison", "Transactions"];
 
 function toProjectViewModel(item) {
   if (!item) return null;
   const heroPath = item.hero || item.cover || "/placeholder.svg";
-  const rawGallery = Array.isArray(item.gallery) && item.gallery.length ? item.gallery : [item.hero].filter(Boolean);
+  // Only use a real gallery — never fall back to the hero image
+  const rawGallery = Array.isArray(item.gallery) && item.gallery.length ? item.gallery : null;
   return {
     id: item.id,
     hero: resolveMediaUrl(heroPath),
     name: item.name || "Project",
-    developer: item.developer || "Developer",
+    developer: item.developer || "",
     emirate: item.emirate || "UAE",
     tagline: item.tagline || item.description?.slice(0, 100) || "",
     price_from: Number(item.price_from || 0),
     sqft_from: Number(item.sqft_from || 0),
-    handover: item.handover || "TBA",
+    handover: item.handover || "",
     configuration: Array.isArray(item.configuration) ? item.configuration : [],
     description: item.description || "",
     location: item.location || "",
-    gallery: rawGallery.map((url) => resolveMediaUrl(url)),
-    floor_plan: resolveMediaUrl(item.floor_plan || heroPath),
-    amenities: Array.isArray(item.amenities) ? item.amenities : ["Swimming Pool", "Gym", "Security", "Parking"],
-    map_image: resolveMediaUrl(item.map_image || "https://images.unsplash.com/photo-1524661135-423995f22d0b?crop=entropy&cs=srgb&fm=jpg&w=800&q=85"),
-    payment_plan:
-      Array.isArray(item.payment_plan) && item.payment_plan.length
-        ? item.payment_plan
-        : [{ milestone: "Down Payment", percent: 20 }, { milestone: "Handover", percent: 80 }],
-    type: item.type || "Apartment",
-    transactions: Array.isArray(item.transactions) ? item.transactions : [],
+    // null = not provided — no fallback
+    gallery:      rawGallery ? rawGallery.map((url) => resolveMediaUrl(url)) : null,
+    floor_plan:   item.floor_plan   ? resolveMediaUrl(item.floor_plan)   : null,
+    amenities:    Array.isArray(item.amenities) && item.amenities.length  ? item.amenities   : null,
+    map_image:    item.map_image    ? resolveMediaUrl(item.map_image)     : null,
+    payment_plan: Array.isArray(item.payment_plan) && item.payment_plan.length ? item.payment_plan : null,
+    type:         item.type || "",
+    transactions: Array.isArray(item.transactions) && item.transactions.length ? item.transactions : null,
   };
 }
 
@@ -42,8 +38,6 @@ export default function ProjectDetail() {
   const [p, setP] = useState(null);
   const [others, setOthers] = useState([]);
   const [tab, setTab] = useState("Details");
-  const [modal, setModal] = useState(false);
-  const [asset, setAsset] = useState("brochure");
   const [mapFullscreen, setMapFullscreen] = useState(false);
 
   useEffect(() => {
@@ -67,10 +61,27 @@ export default function ProjectDetail() {
       }
     });
 
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, [id]);
+
+  // Only show tabs that have real content
+  const activeSections = useMemo(() => {
+    if (!p || p.error) return ["Details"];
+    const sections = ["Details"];
+    if (p.gallery  && p.gallery.length   > 0) sections.push("Gallery");
+    if (p.floor_plan)                          sections.push("Floor Plan");
+    if (p.amenities && p.amenities.length > 0) sections.push("Amenities");
+    if (p.location || p.map_image)             sections.push("Location");
+    if (p.payment_plan && p.payment_plan.length > 0) sections.push("Payment Plan");
+    if (others.length > 0)                     sections.push("Comparison");
+    if (p.transactions && p.transactions.length > 0) sections.push("Transactions");
+    return sections;
+  }, [p, others]);
+
+  // Reset to Details if current tab becomes unavailable
+  useEffect(() => {
+    if (!activeSections.includes(tab)) setTab("Details");
+  }, [activeSections, tab]);
 
   if (!p) {
     return (
@@ -91,46 +102,56 @@ export default function ProjectDetail() {
     );
   }
 
-  const openModal = (a) => {
-    setAsset(a);
-    setModal(true);
-  };
-
   return (
     <>
+      {/* ── Hero ── */}
       <section className="relative h-[80vh] overflow-hidden" data-testid="pdetail-hero">
         <img src={p.hero} alt={p.name} className="w-full h-full object-cover kenburns" />
         <div className="absolute inset-0 bg-gradient-to-b from-black/30 to-black/70" />
         <div className="absolute inset-0 flex flex-col justify-end">
           <div className="container-x px-5 lg:px-12 pb-20">
-            <Link to="/projects" className="text-white/80 flex items-center gap-2 text-xs uppercase tracking-[0.22em]"><ArrowLeft size={14} />All Projects</Link>
-            <div className="overline text-[var(--gold)] mt-8">{p.developer} · {p.emirate}</div>
+            <Link to="/projects" className="text-white/80 flex items-center gap-2 text-xs uppercase tracking-[0.22em]">
+              <ArrowLeft size={14} />All Projects
+            </Link>
+            <div className="overline text-[var(--gold)] mt-8">
+              {p.developer}{p.developer && p.emirate ? " · " : ""}{p.emirate}
+            </div>
             <h1 className="font-display text-white text-5xl md:text-7xl mt-4 leading-[0.95]">{p.name}</h1>
-            <p className="text-white/85 mt-4 max-w-xl">{p.tagline}</p>
+            {p.tagline && <p className="text-white/85 mt-4 max-w-xl">{p.tagline}</p>}
             <div className="flex gap-4 mt-8 flex-wrap">
-              <button onClick={() => openModal("brochure")} className="btn-ghost-light" data-testid="pdetail-cta-brochure"><Download size={14} />Download Brochure</button>
-              <button onClick={() => openModal("factsheet")} className="text-white text-xs uppercase tracking-[0.22em] border-b border-[var(--gold)] pb-2">Factsheet</button>
+              <Link to={`/contact?project=${p.id}&asset=brochure`} className="btn-ghost-light" data-testid="pdetail-cta-brochure">
+                <Download size={14} />Download Brochure
+              </Link>
+              <Link to={`/contact?project=${p.id}&asset=factsheet`} className="text-white text-xs uppercase tracking-[0.22em] border-b border-[var(--gold)] pb-2">
+                Factsheet
+              </Link>
             </div>
           </div>
         </div>
       </section>
 
+      {/* ── Stats bar ── */}
       <section className="bg-[var(--ink)] text-white" data-testid="pdetail-stats">
         <div className="container-x px-5 lg:px-12 grid grid-cols-2 md:grid-cols-4 gap-px bg-white/10">
-          <Stat label="Starting From" value={`AED ${(p.price_from / 1_000_000).toFixed(2)}M`} />
-          <Stat label="Sqft From" value={p.sqft_from.toLocaleString()} />
-          <Stat label="Handover" value={p.handover} />
-          <Stat label="Configurations" value={p.configuration.join(" · ")} />
+          {p.price_from > 0 && <Stat label="Starting From" value={`AED ${(p.price_from / 1_000_000).toFixed(2)}M`} />}
+          {p.sqft_from  > 0 && <Stat label="Sqft From"     value={p.sqft_from.toLocaleString()} />}
+          {p.handover        && <Stat label="Handover"      value={p.handover} />}
+          {p.configuration.length > 0 && <Stat label="Configurations" value={p.configuration.join(" · ")} />}
         </div>
       </section>
 
+      {/* ── Tab navigation (only available sections) ── */}
       <section className="sticky top-[68px] z-30 bg-white border-b border-[var(--line)]" data-testid="pdetail-tabs">
         <div className="container-x px-5 lg:px-12 flex gap-1 overflow-x-auto">
-          {SECTIONS.map((s) => (
+          {activeSections.map((s) => (
             <button
               key={s}
               onClick={() => setTab(s)}
-              className={`whitespace-nowrap text-[11px] uppercase tracking-[0.22em] px-4 py-5 border-b-2 transition-colors ${tab === s ? "border-[var(--gold)] text-[var(--ink)]" : "border-transparent text-[var(--muted)] hover:text-[var(--ink)]"}`}
+              className={`whitespace-nowrap text-[11px] uppercase tracking-[0.22em] px-4 py-5 border-b-2 transition-colors ${
+                tab === s
+                  ? "border-[var(--gold)] text-[var(--ink)]"
+                  : "border-transparent text-[var(--muted)] hover:text-[var(--ink)]"
+              }`}
               data-testid={`tab-${s.toLowerCase().replace(/\s+/g, "-")}`}
             >
               {s}
@@ -139,42 +160,69 @@ export default function ProjectDetail() {
         </div>
       </section>
 
-      <section className="section-pad bg-white" data-testid={`pdetail-section-${tab.toLowerCase().replace(/\s+/g, "-")}`}>
+      {/* ── Content ── */}
+      <section
+        className="section-pad bg-white"
+        data-testid={`pdetail-section-${tab.toLowerCase().replace(/\s+/g, "-")}`}
+      >
         <div className="container-x">
+
+          {/* Details */}
           {tab === "Details" && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
               <div className="lg:col-span-7">
                 <div className="overline text-[var(--gold-deep)]">The Project</div>
                 <h2 className="font-display text-4xl md:text-5xl mt-3 leading-tight">{p.name}</h2>
-                <p className="text-lg mt-6 leading-relaxed text-[var(--ink-2)]">{p.description}</p>
-                <p className="text-base mt-4 leading-relaxed text-[var(--ink-2)]">
-                  Located in <strong>{p.location}</strong>, developed by <strong>{p.developer}</strong>, with a planned handover in <strong>{p.handover}</strong>. Available in {p.configuration.join(", ")}.
-                </p>
+                {p.description && (
+                  <p className="text-lg mt-6 leading-relaxed text-[var(--ink-2)]">{p.description}</p>
+                )}
+                {(p.location || p.developer || p.handover || p.configuration.length > 0) && (
+                  <p className="text-base mt-4 leading-relaxed text-[var(--ink-2)]">
+                    {p.location  && <><span>Located in </span><strong>{p.location}</strong><span>{p.developer || p.handover ? ", " : "."}</span></>}
+                    {p.developer && <><span>developed by </span><strong>{p.developer}</strong><span>{p.handover ? ", " : "."}</span></>}
+                    {p.handover  && <><span>with a planned handover in </span><strong>{p.handover}</strong><span>.</span></>}
+                    {p.configuration.length > 0 && <><span> Available in {p.configuration.join(", ")}.</span></>}
+                  </p>
+                )}
               </div>
               <aside className="lg:col-span-5 bg-[var(--bg-alt)] p-8">
                 <div className="overline text-[var(--gold-deep)]">Speak with a Consultant</div>
                 <h3 className="font-display text-3xl mt-3">Personalized walkthrough.</h3>
-                <p className="text-sm text-[var(--muted)] mt-3">Floor plans, payment options, and pre-launch pricing - direct from the desk handling this project.</p>
+                <p className="text-sm text-[var(--muted)] mt-3">
+                  Floor plans, payment options, and pre-launch pricing — direct from the desk handling this project.
+                </p>
                 <div className="mt-6 space-y-3">
-                  <a href="tel:+971545193393" className="flex items-center gap-3 text-sm link-gold"><Phone size={14} className="text-[var(--gold-deep)]" />+971 54 519 3393</a>
-                  <a href="mailto:hello@triadrealty.ae" className="flex items-center gap-3 text-sm link-gold"><Mail size={14} className="text-[var(--gold-deep)]" />hello@triadrealty.ae</a>
+                  <a href="tel:+971545193393" className="flex items-center gap-3 text-sm link-gold">
+                    <Phone size={14} className="text-[var(--gold-deep)]" />+971 54 519 3393
+                  </a>
+                  <a href="mailto:hello@triadrealty.ae" className="flex items-center gap-3 text-sm link-gold">
+                    <Mail size={14} className="text-[var(--gold-deep)]" />hello@triadrealty.ae
+                  </a>
                 </div>
-                <button onClick={() => openModal("brochure")} className="btn-gold w-full justify-center mt-6">Request Brochure</button>
+                <Link to={`/contact?project=${p.id}&asset=brochure`} className="btn-gold w-full justify-center mt-6">
+                  Request Brochure
+                </Link>
               </aside>
             </div>
           )}
 
-          {tab === "Gallery" && (
+          {/* Gallery — only rendered when real gallery exists */}
+          {tab === "Gallery" && p.gallery && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {p.gallery.map((g, i) => (
-                <div key={i} className={`img-zoom ${i === 0 ? "md:row-span-2 aspect-[4/5]" : "aspect-[4/3]"}`} data-testid={`gallery-img-${i}`}>
+                <div
+                  key={i}
+                  className={`img-zoom ${i === 0 ? "md:row-span-2 aspect-[4/5]" : "aspect-[4/3]"}`}
+                  data-testid={`gallery-img-${i}`}
+                >
                   <img src={g} alt="" className="w-full h-full object-cover" />
                 </div>
               ))}
             </div>
           )}
 
-          {tab === "Floor Plan" && (
+          {/* Floor Plan — only rendered when real floor_plan exists */}
+          {tab === "Floor Plan" && p.floor_plan && (
             <div>
               <div className="overline text-[var(--gold-deep)]">Floor Plans</div>
               <h2 className="font-display text-4xl mt-3">Spatial blueprints.</h2>
@@ -182,19 +230,24 @@ export default function ProjectDetail() {
                 <img src={p.floor_plan} alt="floor plan" className="w-full" />
                 <div className="mt-6 flex justify-between items-center">
                   <div className="text-sm text-[var(--muted)]">Detailed plans by configuration available on request.</div>
-                  <button onClick={() => openModal("floor-plan")} className="btn-gold">Request Full Plans</button>
+                  <Link to={`/contact?project=${p.id}&asset=floor-plan`} className="btn-gold">Request Full Plans</Link>
                 </div>
               </div>
             </div>
           )}
 
-          {tab === "Amenities" && (
+          {/* Amenities — only rendered when real amenities exist */}
+          {tab === "Amenities" && p.amenities && (
             <div>
               <div className="overline text-[var(--gold-deep)]">Amenities</div>
               <h2 className="font-display text-4xl mt-3">Designed around the residents.</h2>
               <div className="mt-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-px bg-[var(--line)]">
                 {p.amenities.map((a) => (
-                  <div key={a} className="bg-white p-6 flex items-center gap-3" data-testid={`amenity-${a.toLowerCase().replace(/\s+/g, "-")}`}>
+                  <div
+                    key={a}
+                    className="bg-white p-6 flex items-center gap-3"
+                    data-testid={`amenity-${a.toLowerCase().replace(/\s+/g, "-")}`}
+                  >
                     <ChevronRight size={14} className="text-[var(--gold-deep)]" />
                     <span>{a}</span>
                   </div>
@@ -203,34 +256,47 @@ export default function ProjectDetail() {
             </div>
           )}
 
+          {/* Location — only rendered when location text or map image exists */}
           {tab === "Location" && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-              <div className="lg:col-span-7">
-                <div 
-                  className="aspect-[4/3] img-zoom cursor-zoom-in relative group overflow-hidden shadow-md"
-                  onClick={() => setMapFullscreen(true)}
-                  data-testid="map-container"
-                >
-                  <img src={p.map_image} alt="Location Map" className="w-full h-full object-cover" />
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-                    <span className="text-white text-xs uppercase tracking-[0.2em] bg-black/60 px-4 py-2 border border-white/20">
-                      View Fullscreen
-                    </span>
+              {p.map_image && (
+                <div className="lg:col-span-7">
+                  <div
+                    className="aspect-[4/3] img-zoom cursor-zoom-in relative group overflow-hidden shadow-md"
+                    onClick={() => setMapFullscreen(true)}
+                    data-testid="map-container"
+                  >
+                    <img src={p.map_image} alt="Location Map" className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                      <span className="text-white text-xs uppercase tracking-[0.2em] bg-black/60 px-4 py-2 border border-white/20">
+                        View Fullscreen
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="lg:col-span-5">
+              )}
+              <div className={p.map_image ? "lg:col-span-5" : "lg:col-span-12"}>
                 <div className="overline text-[var(--gold-deep)]">Location</div>
-                <h2 className="font-display text-4xl mt-3">{p.location}</h2>
-                <p className="mt-4 text-[var(--ink-2)] leading-relaxed">Strategic positioning in one of {p.emirate}'s most sought-after corridors - minutes from key business districts, beaches, and lifestyle anchors.</p>
-                <div className="mt-6 space-y-3 text-sm">
-                  <div className="flex items-center gap-3"><MapPin size={14} className="text-[var(--gold-deep)]" /><span>{p.location}, {p.emirate}, UAE</span></div>
-                </div>
+                <h2 className="font-display text-4xl mt-3">{p.location || p.emirate}</h2>
+                {p.emirate && (
+                  <p className="mt-4 text-[var(--ink-2)] leading-relaxed">
+                    Strategic positioning in one of {p.emirate}'s most sought-after corridors — minutes from key business districts, beaches, and lifestyle anchors.
+                  </p>
+                )}
+                {p.location && (
+                  <div className="mt-6 space-y-3 text-sm">
+                    <div className="flex items-center gap-3">
+                      <MapPin size={14} className="text-[var(--gold-deep)]" />
+                      <span>{p.location}{p.emirate ? `, ${p.emirate}, UAE` : ""}</span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
 
-          {tab === "Payment Plan" && (
+          {/* Payment Plan — only rendered when real payment plan exists */}
+          {tab === "Payment Plan" && p.payment_plan && (
             <div>
               <div className="overline text-[var(--gold-deep)]">Payment Plan</div>
               <h2 className="font-display text-4xl mt-3">Structured for the buyer.</h2>
@@ -245,10 +311,11 @@ export default function ProjectDetail() {
                   </div>
                 ))}
               </div>
-              <button onClick={() => openModal("payment-plan")} className="btn-ghost mt-8">Request Detailed Plan</button>
+              <Link to={`/contact?project=${p.id}&asset=payment-plan`} className="btn-ghost mt-8">Request Detailed Plan</Link>
             </div>
           )}
 
+          {/* Comparison — shown when there are other projects to compare */}
           {tab === "Comparison" && (
             <div>
               <div className="overline text-[var(--gold-deep)]">Comparison</div>
@@ -268,30 +335,33 @@ export default function ProjectDetail() {
                   <tbody>
                     <tr className="bg-[var(--gold)]/10">
                       <td className="p-4 font-display text-lg">{p.name}</td>
-                      <td className="p-4">{p.location}</td>
-                      <td className="p-4">{p.type}</td>
-                      <td className="p-4">{p.price_from.toLocaleString()}</td>
-                      <td className="p-4">{p.sqft_from.toLocaleString()}</td>
-                      <td className="p-4">{p.handover}</td>
+                      <td className="p-4">{p.location || "—"}</td>
+                      <td className="p-4">{p.type    || "—"}</td>
+                      <td className="p-4">{p.price_from > 0 ? p.price_from.toLocaleString() : "—"}</td>
+                      <td className="p-4">{p.sqft_from  > 0 ? p.sqft_from.toLocaleString()  : "—"}</td>
+                      <td className="p-4">{p.handover   || "—"}</td>
                     </tr>
                     {others.slice(0, 4).map((o) => (
                       <tr key={o.id} className="border-t border-[var(--line)]">
-                        <td className="p-4"><Link to={`/projects/${o.id}`} className="link-gold">{o.title}</Link></td>
-                        <td className="p-4">{o.location}</td>
-                        <td className="p-4">{o.type}</td>
-                        <td className="p-4">{`AED ${Number(o.price_from || 0).toLocaleString()}`}</td>
-                        <td className="p-4">{Number(o.sqft_from || 0).toLocaleString()}</td>
-                        <td className="p-4">{o.handover || "TBA"}</td>
+                        <td className="p-4">
+                          <Link to={`/projects/${o.id}`} className="link-gold">{o.name}</Link>
+                        </td>
+                        <td className="p-4">{o.location || "—"}</td>
+                        <td className="p-4">{o.type     || "—"}</td>
+                        <td className="p-4">{o.price_from > 0 ? `AED ${Number(o.price_from).toLocaleString()}` : "—"}</td>
+                        <td className="p-4">{o.sqft_from  > 0 ? Number(o.sqft_from).toLocaleString()            : "—"}</td>
+                        <td className="p-4">{o.handover   || "—"}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              <button onClick={() => openModal("comparison")} className="btn-ghost mt-8">Download Full Comparison</button>
+              <Link to={`/contact?project=${p.id}&asset=comparison`} className="btn-ghost mt-8">Download Full Comparison</Link>
             </div>
           )}
 
-          {tab === "Transactions" && (
+          {/* Transactions — only rendered when real transactions exist */}
+          {tab === "Transactions" && p.transactions && (
             <div>
               <div className="overline text-[var(--gold-deep)]">Transaction History</div>
               <h2 className="font-display text-4xl mt-3">Recent recorded sales.</h2>
@@ -306,21 +376,20 @@ export default function ProjectDetail() {
                   </div>
                 ))}
               </div>
-              <button onClick={() => openModal("market-analysis")} className="btn-ghost mt-8">Get Market Report</button>
+              <Link to={`/contact?project=${p.id}&asset=market-analysis`} className="btn-ghost mt-8">Get Market Report</Link>
             </div>
           )}
+
         </div>
       </section>
 
-      <BrochureModal open={modal} onClose={() => setModal(false)} projectId={p.id} asset={asset} />
-
       {/* Fullscreen Map Modal */}
-      {mapFullscreen && (
-        <div 
+      {mapFullscreen && p.map_image && (
+        <div
           className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 cursor-zoom-out"
           onClick={() => setMapFullscreen(false)}
         >
-          <button 
+          <button
             className="absolute top-6 right-6 text-white hover:text-[var(--gold)] transition-colors p-2 bg-black/40 rounded-full"
             onClick={() => setMapFullscreen(false)}
             data-testid="close-map-fullscreen"
@@ -330,11 +399,11 @@ export default function ProjectDetail() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
-          <img 
-            src={p.map_image} 
-            alt="Project Location Map" 
+          <img
+            src={p.map_image}
+            alt="Project Location Map"
             className="max-w-full max-h-[90vh] object-contain shadow-2xl rounded border border-white/10"
-            onClick={(e) => e.stopPropagation()} 
+            onClick={(e) => e.stopPropagation()}
             data-testid="map-fullscreen-image"
           />
         </div>

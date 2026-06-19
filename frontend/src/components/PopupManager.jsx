@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import axios from 'axios';
 
@@ -33,14 +32,19 @@ export default function PopupManager() {
   }, []);
 
   const isAdminPage = location.pathname.startsWith('/admin');
-
   if (!showPopup || !popupData || isAdminPage) return null;
 
-  const content = (
+  /**
+   * The image is displayed at its natural dimensions, bounded only by the
+   * viewport. No fixed container width or aspect-ratio cropping is applied.
+   * max-h-[90vh] max-w-[90vw] ensure it never overflows the screen while
+   * w-auto h-auto lets the browser preserve the image's native ratio.
+   */
+  const posterImage = (
     <img
       src={resolveMediaUrl(popupData.poster_image_url)}
       alt="Exclusive Launch Announcement"
-      className="w-full h-auto max-h-[80vh] object-contain border border-[var(--gold)]/20 shadow-2xl hover:scale-[1.01] transition-transform duration-500 cursor-pointer"
+      className="block max-h-[90vh] max-w-[90vw] w-auto h-auto border border-[var(--gold)]/20 shadow-2xl hover:scale-[1.01] transition-transform duration-500 cursor-pointer"
     />
   );
 
@@ -49,21 +53,21 @@ export default function PopupManager() {
       className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
       data-testid="popup-poster-modal"
     >
+      {/* Click-outside to dismiss */}
       <div className="absolute inset-0" onClick={() => setShowPopup(false)} />
 
-      <div className="relative w-full max-w-[420px] bg-transparent shadow-2xl z-10 flex flex-col">
+      {/* Image container — size is driven entirely by the image itself */}
+      <div className="relative z-10 flex-shrink-0">
         {popupData.project_link ? (
           <Link
             to={popupData.project_link}
-            className="w-full h-auto block"
+            className="block"
             onClick={() => setShowPopup(false)}
           >
-            {content}
+            {posterImage}
           </Link>
         ) : (
-          <div className="w-full h-auto">
-            {content}
-          </div>
+          posterImage
         )}
       </div>
     </div>

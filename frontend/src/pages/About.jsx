@@ -50,7 +50,7 @@ export default function About() {
         const allTeam = teamRes.value.data.results || [];
         setFounders(
           allTeam
-            .filter((t) => t && t.isFounder && t.tier !== "none" && t.showOnAbout !== false)
+            .filter((t) => t && t.isFounder && t.tier !== "none")
             .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
         );
         setTeam(
@@ -89,11 +89,11 @@ export default function About() {
           />
         </div>
 
-        {/* Founder Cards — directly below the photo */}
-        <div className="mt-10 grid grid-cols-1 lg:grid-cols-3 gap-10" data-reveal>
+        {/* Founder Cards — directly below the photo, Home-page dark style */}
+        <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-8" data-reveal>
           {founders.map((f) => (
             <div key={f.id || f.name} className="group" data-testid={`founder-${(f.name || "").toLowerCase().replace(/\s+/g, "-")}`}>
-              <div className="aspect-[3/4] img-zoom bg-white/5 relative">
+              <div className="aspect-[3/4] img-zoom bg-[var(--surface-dark,#141414)] relative">
                 {f.photo ? (
                   <img src={resolveMediaUrl(f.photo)} alt={f.name} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700" />
                 ) : (
@@ -103,35 +103,33 @@ export default function About() {
                     </span>
                   </div>
                 )}
-                {/* Click overlay to go to single page */}
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
                   <Link to={`/team/${f.id}`} className="btn-gold !px-6 !py-3">View More</Link>
                 </div>
               </div>
-              <h3 className="font-display text-3xl mt-6">
+              <h3 className="font-display text-2xl mt-5">
                 <Link to={`/team/${f.id}`} className="hover:text-[var(--gold)] transition-colors">{f.name}</Link>
               </h3>
-              <div className="overline opacity-70 mt-1">{f.role}</div>
-              <p className="text-sm opacity-80 mt-4 leading-relaxed">{f.bio}</p>
-              <div className="flex flex-wrap gap-2.5 mt-6">
+              <p className="overline opacity-60 mt-1">{f.role || "Founder"}</p>
+              <div className="flex gap-2.5 mt-4 relative z-10">
                 {f.phone && (
                   <a
                     href={toWhatsApp(f.phone)}
                     target="_blank"
                     rel="noreferrer"
                     title="WhatsApp"
-                    className="w-9 h-9 border border-white/30 flex items-center justify-center hover:bg-[var(--gold)] hover:border-[var(--gold)] hover:text-[var(--ink)] transition-all"
+                    className="w-8 h-8 flex items-center justify-center border border-white/20 hover:border-[var(--gold)] hover:text-[var(--gold)] text-white transition-colors"
                   >
-                    <Phone size={14} />
+                    <Phone size={13} />
                   </a>
                 )}
                 {f.email && (
                   <a
                     href={`mailto:${f.email}`}
                     title="Email"
-                    className="w-9 h-9 border border-white/30 flex items-center justify-center hover:bg-[var(--gold)] hover:border-[var(--gold)] hover:text-[var(--ink)] transition-all"
+                    className="w-8 h-8 flex items-center justify-center border border-white/20 hover:border-[var(--gold)] hover:text-[var(--gold)] text-white transition-colors"
                   >
-                    <Mail size={14} />
+                    <Mail size={13} />
                   </a>
                 )}
                 {f.instagram && (
@@ -140,9 +138,9 @@ export default function About() {
                     target="_blank"
                     rel="noreferrer"
                     title="Instagram"
-                    className="w-9 h-9 border border-white/30 flex items-center justify-center hover:bg-[var(--gold)] hover:border-[var(--gold)] hover:text-[var(--ink)] transition-all"
+                    className="w-8 h-8 flex items-center justify-center border border-white/20 hover:border-[var(--gold)] hover:text-[var(--gold)] text-white transition-colors"
                   >
-                    <Instagram size={14} />
+                    <Instagram size={13} />
                   </a>
                 )}
                 {f.linkedin && (
@@ -151,9 +149,9 @@ export default function About() {
                     target="_blank"
                     rel="noreferrer"
                     title="LinkedIn"
-                    className="w-9 h-9 border border-white/30 flex items-center justify-center hover:bg-[var(--gold)] hover:border-[var(--gold)] hover:text-[var(--ink)] transition-all"
+                    className="w-8 h-8 flex items-center justify-center border border-white/20 hover:border-[var(--gold)] hover:text-[var(--gold)] text-white transition-colors"
                   >
-                    <Linkedin size={14} />
+                    <Linkedin size={13} />
                   </a>
                 )}
                 {f.facebook && (
@@ -162,9 +160,9 @@ export default function About() {
                     target="_blank"
                     rel="noreferrer"
                     title="Facebook"
-                    className="w-9 h-9 border border-white/30 flex items-center justify-center hover:bg-[var(--gold)] hover:border-[var(--gold)] hover:text-[var(--ink)] transition-all"
+                    className="w-8 h-8 flex items-center justify-center border border-white/20 hover:border-[var(--gold)] hover:text-[var(--gold)] text-white transition-colors"
                   >
-                    <Facebook size={14} />
+                    <Facebook size={13} />
                   </a>
                 )}
               </div>
@@ -176,34 +174,36 @@ export default function About() {
   );
 
   const renderTeam = () => (
-    <section className="section-pad bg-white" data-testid="about-team" key="team">
-      <div className="container-x">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+    <section className="section-pad bg-[var(--ink)] text-white relative" data-testid="about-team" key="team">
+      <div className="grain absolute inset-0" />
+      <div className="container-x relative">
+        <div className="flex items-end justify-between flex-wrap gap-6 mb-14">
           <div>
-            <div className="overline text-[var(--gold-deep)]">The Team</div>
+            <div className="overline text-[var(--gold)]">The Team</div>
             <h2 className="font-display text-4xl md:text-6xl mt-3 leading-none">Senior consultants. Specialised desks.</h2>
           </div>
-          <Link to="/team" className="btn-gold whitespace-nowrap self-start md:self-auto mb-2">Meet the Team <ArrowUpRight size={14} /></Link>
+          <Link to="/team" className="btn-gold whitespace-nowrap self-start md:self-auto">Meet the Team <ArrowUpRight size={14} /></Link>
         </div>
 
-        <div className="mt-16 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10" data-reveal>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8" data-reveal>
           {team.map((t) => (
             <div key={t.id || t.name} className="group" data-testid={`about-team-${(t.name || "").toLowerCase().replace(/\s+/g, "-")}`}>
-              <div className="aspect-[3/4] img-zoom bg-[var(--bg-alt)] relative">
+              <div className="aspect-[3/4] img-zoom bg-[var(--surface-dark,#141414)] relative">
                 {t.photo ? (
-                  <img src={resolveMediaUrl(t.photo)} alt={t.name} className="w-full h-full object-cover" />
+                  <img src={resolveMediaUrl(t.photo)} alt={t.name} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700" />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-[var(--bg-alt)] text-[var(--ink)]">
-                    <span className="font-display text-6xl text-[var(--gold-deep)]">
+                  <div className="w-full h-full flex items-center justify-center bg-white/5 text-white">
+                    <span className="font-display text-6xl text-[var(--gold)]">
                       {(t.name || "").split(" ").map((part) => part[0]).join("").slice(0, 2)}
                     </span>
                   </div>
                 )}
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                  <Link to={`/team/${t.id}`} className="btn-gold !px-6 !py-3">View More</Link>
+                </div>
               </div>
               <h3 className="font-display text-2xl mt-5">{t.name}</h3>
-              <div className="overline opacity-60 mt-1">{t.role || "Property Consultant"}</div>
-              {t.experience && <p className="text-sm mt-3 text-[var(--ink-2)]"><strong className="font-medium">Experience:</strong> {t.experience}</p>}
-              {t.speaks && <p className="text-sm text-[var(--ink-2)]"><strong className="font-medium">Speaks:</strong> {t.speaks}</p>}
+              <p className="overline opacity-60 mt-1">{t.role || "Property Consultant"}</p>
               <div className="flex gap-2.5 mt-4 relative z-10">
                 {t.phone && (
                   <a
@@ -211,7 +211,7 @@ export default function About() {
                     target="_blank"
                     rel="noreferrer"
                     title="WhatsApp"
-                    className="w-8 h-8 flex items-center justify-center border border-[var(--line)] hover:border-[var(--gold)] hover:text-[var(--gold-deep)] text-[var(--ink)] transition-colors"
+                    className="w-8 h-8 flex items-center justify-center border border-white/20 hover:border-[var(--gold)] hover:text-[var(--gold)] text-white transition-colors"
                   >
                     <Phone size={13} />
                   </a>
@@ -220,7 +220,7 @@ export default function About() {
                   <a
                     href={`mailto:${t.email}`}
                     title="Email"
-                    className="w-8 h-8 flex items-center justify-center border border-[var(--line)] hover:border-[var(--gold)] hover:text-[var(--gold-deep)] text-[var(--ink)] transition-colors"
+                    className="w-8 h-8 flex items-center justify-center border border-white/20 hover:border-[var(--gold)] hover:text-[var(--gold)] text-white transition-colors"
                   >
                     <Mail size={13} />
                   </a>
@@ -231,7 +231,7 @@ export default function About() {
                     target="_blank"
                     rel="noreferrer"
                     title="Instagram"
-                    className="w-8 h-8 flex items-center justify-center border border-[var(--line)] hover:border-[var(--gold)] hover:text-[var(--gold-deep)] text-[var(--ink)] transition-colors"
+                    className="w-8 h-8 flex items-center justify-center border border-white/20 hover:border-[var(--gold)] hover:text-[var(--gold)] text-white transition-colors"
                   >
                     <Instagram size={13} />
                   </a>
@@ -242,7 +242,7 @@ export default function About() {
                     target="_blank"
                     rel="noreferrer"
                     title="LinkedIn"
-                    className="w-8 h-8 flex items-center justify-center border border-[var(--line)] hover:border-[var(--gold)] hover:text-[var(--gold-deep)] text-[var(--ink)] transition-colors"
+                    className="w-8 h-8 flex items-center justify-center border border-white/20 hover:border-[var(--gold)] hover:text-[var(--gold)] text-white transition-colors"
                   >
                     <Linkedin size={13} />
                   </a>
@@ -253,7 +253,7 @@ export default function About() {
                     target="_blank"
                     rel="noreferrer"
                     title="Facebook"
-                    className="w-8 h-8 flex items-center justify-center border border-[var(--line)] hover:border-[var(--gold)] hover:text-[var(--gold-deep)] text-[var(--ink)] transition-colors"
+                    className="w-8 h-8 flex items-center justify-center border border-white/20 hover:border-[var(--gold)] hover:text-[var(--gold)] text-white transition-colors"
                   >
                     <Facebook size={13} />
                   </a>
@@ -263,9 +263,12 @@ export default function About() {
           ))}
         </div>
 
-        <div className="mt-16 border-t border-[var(--line)] pt-10 flex flex-wrap items-center justify-between gap-4">
+        <div className="mt-14 border-t border-white/20 pt-10 flex flex-wrap items-center justify-between gap-4">
           <p className="font-display text-2xl">Want to work alongside this team?</p>
-          <Link to="/careers" className="btn-gold">View Open Positions <ArrowUpRight size={14} /></Link>
+          <div className="flex flex-wrap gap-4">
+            <Link to="/careers" className="btn-gold">View Open Positions <ArrowUpRight size={14} /></Link>
+            <Link to="/team" className="btn-ghost-light">View All Members <ArrowUpRight size={14} /></Link>
+          </div>
         </div>
       </div>
     </section>
@@ -343,17 +346,8 @@ export default function About() {
         </div>
       </section>
 
-      {homepageSettings.team_comes_first ? (
-        <>
-          {renderTeam()}
-          {renderFounders()}
-        </>
-      ) : (
-        <>
-          {renderFounders()}
-          {renderTeam()}
-        </>
-      )}
+      {renderFounders()}
+      {renderTeam()}
 
       {/* LATEST LAUNCH UPDATES */}
       <section className="section-pad bg-white latest-launch-updates" data-testid="about-launch-updates">

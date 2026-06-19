@@ -206,6 +206,17 @@ class PopupSettingsIn(BaseModel):
     project_link: Optional[str] = None
 
 
+class ConsultationIn(BaseModel):
+    """Booking payload submitted from the public consultation modal."""
+    model_config = ConfigDict(extra="ignore")
+    name: str = Field(..., min_length=1, max_length=120)
+    email: str = Field(..., max_length=200)
+    phone: Optional[str] = Field(None, max_length=50)
+    date: str = Field(..., min_length=1, max_length=50)   # e.g. "2026-07-01"
+    time_slot: str = Field(..., min_length=1, max_length=50)  # e.g. "10:00 AM"
+    notes: Optional[str] = Field(None, max_length=500)
+
+
 class HomepageSettingsIn(BaseModel):
     launch_title: str
     launch_description: str
@@ -991,9 +1002,59 @@ async def get_popup_settings():
             "btn1_link": "/projects/marina-aurora",
             "btn2_label": "Compare",
             "btn2_link": "/analysis",
-            "active": True
+            "active": True,
+            "poster_image_url": "",
+            "project_link": "",
         }
     return s
+
+
+# ── Consultation bookings ──────────────────────────────────────────────────────
+
+@api_router.post("/consultations", status_code=201)
+async def book_consultation(payload: ConsultationIn):
+    """Public endpoint — record a consultation booking."""
+    doc = {
+        "id": str(uuid.uuid4()),
+        "name": payload.name,
+        "email": payload.email,
+        "phone": payload.phone or "",
+        "date": payload.date,
+        "time_slot": payload.time_slot,
+        "notes": payload.notes or "",
+        "status": "pending",
+        "created_at": datetime.utcnow().isoformat(),
+    }
+    await db_insert("consultations", doc)
+    return {"ok": True, "id": doc["id"]}
+
+
+@api_router.get("/admin/consultations")
+async def list_consultations(_=Depends(require_developer)):
+    """Developer-only: list all consultation bookings newest-first."""
+    items = await db_find("consultations", {})
+    items.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+    return {"count": len(items), "results": items}
+
+
+@api_router.patch("/admin/consultations/{cid}")
+async def update_consultation_status(cid: str, body: dict, _=Depends(require_developer)):
+    """Update consultation status (pending / confirmed / cancelled)."""
+    allowed = {"status"}
+    updates = {k: v for k, v in body.items() if k in allowed}
+    updated = await db_update("consultations", cid, updates)
+    if not updated:
+        raise HTTPException(404, "Consultation not found")
+    return updated
+
+
+@api_router.delete("/admin/consultations/{cid}")
+async def delete_consultation(cid: str, _=Depends(require_developer)):
+    ok = await db_delete("consultations", cid)
+    if not ok:
+        raise HTTPException(404, "Consultation not found")
+    return {"ok": True}
+
 
 
 @api_router.get("/settings/homepage")

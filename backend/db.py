@@ -43,6 +43,7 @@ _store: dict[str, list] = {
     "settings": [],
     "reviews": [],
     "experience": [],
+    "consultations": [],
 }
 
 STORE_FILE = ROOT_DIR / "db_store.json"
@@ -109,13 +110,17 @@ async def mem_update(collection: str, doc_id: str, updates: dict):
     return None
 
 
-async def mem_delete(collection: str, doc_id: str):
+async def mem_delete(collection: str, doc_id: str) -> bool:
+    initial_len = len(_store[collection])
     _store[collection] = [
         doc
         for doc in _store[collection]
         if doc.get("id") != doc_id and doc.get("_id") != doc_id
     ]
-    _save_store()
+    if len(_store[collection]) < initial_len:
+        _save_store()
+        return True
+    return False
 
 
 async def mem_delete_many(collection: str, query: dict):
@@ -154,11 +159,12 @@ async def db_update(collection: str, doc_id: str, updates: dict):
     return await mem_update(collection, doc_id, updates)
 
 
-async def db_delete(collection: str, doc_id: str):
+async def db_delete(collection: str, doc_id: str) -> bool:
     if USE_MONGO:
-        await db[collection].delete_one({"id": doc_id})
+        res = await db[collection].delete_one({"id": doc_id})
+        return res.deleted_count > 0
     else:
-        await mem_delete(collection, doc_id)
+        return await mem_delete(collection, doc_id)
 
 
 async def db_delete_many(collection: str, query: dict):

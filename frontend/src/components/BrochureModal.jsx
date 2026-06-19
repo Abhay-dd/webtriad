@@ -2,65 +2,24 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { X, Download, Phone } from "lucide-react";
 import { API_URL as API } from "../config";
+import { DIAL_CODES, validatePhone } from "../utils/phoneValidation";
 
-// ─── Country dial-code list (common first, then alphabetical) ────────────────
-const DIAL_CODES = [
-  { code: "AE", dial: "+971", name: "UAE" },
-  { code: "SA", dial: "+966", name: "Saudi Arabia" },
-  { code: "QA", dial: "+974", name: "Qatar" },
-  { code: "KW", dial: "+965", name: "Kuwait" },
-  { code: "BH", dial: "+973", name: "Bahrain" },
-  { code: "OM", dial: "+968", name: "Oman" },
-  { code: "IN", dial: "+91",  name: "India" },
-  { code: "PK", dial: "+92",  name: "Pakistan" },
-  { code: "GB", dial: "+44",  name: "United Kingdom" },
-  { code: "US", dial: "+1",   name: "United States" },
-  { code: "CA", dial: "+1",   name: "Canada" },
-  { code: "AU", dial: "+61",  name: "Australia" },
-  { code: "DE", dial: "+49",  name: "Germany" },
-  { code: "FR", dial: "+33",  name: "France" },
-  { code: "RU", dial: "+7",   name: "Russia" },
-  { code: "CN", dial: "+86",  name: "China" },
-  { code: "JP", dial: "+81",  name: "Japan" },
-  { code: "SG", dial: "+65",  name: "Singapore" },
-  { code: "EG", dial: "+20",  name: "Egypt" },
-  { code: "NG", dial: "+234", name: "Nigeria" },
-  { code: "ZA", dial: "+27",  name: "South Africa" },
-  { code: "BR", dial: "+55",  name: "Brazil" },
-  { code: "MX", dial: "+52",  name: "Mexico" },
-  { code: "TR", dial: "+90",  name: "Turkey" },
-  { code: "ID", dial: "+62",  name: "Indonesia" },
-  { code: "MY", dial: "+60",  name: "Malaysia" },
-  { code: "PH", dial: "+63",  name: "Philippines" },
-  { code: "BD", dial: "+880", name: "Bangladesh" },
-  { code: "LK", dial: "+94",  name: "Sri Lanka" },
-  { code: "NP", dial: "+977", name: "Nepal" },
-  { code: "GH", dial: "+233", name: "Ghana" },
-  { code: "KE", dial: "+254", name: "Kenya" },
-  { code: "JO", dial: "+962", name: "Jordan" },
-  { code: "LB", dial: "+961", name: "Lebanon" },
-  { code: "IQ", dial: "+964", name: "Iraq" },
-  { code: "IR", dial: "+98",  name: "Iran" },
-  { code: "ET", dial: "+251", name: "Ethiopia" },
-];
-
-// ─── Validation helpers ──────────────────────────────────────────────────────
+// ─── Field validators ─────────────────────────────────────────────────────────
 const NAME_RE  = /^[A-Za-z\u00C0-\u024F\u0600-\u06FF\s'\-]{2,80}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-const PHONE_RE = /^[0-9]{5,14}$/; // digits only, 5–14 chars after stripping dial code
 
-function validateName(v)  { return NAME_RE.test(v.trim()) ? "" : "Enter a valid full name (letters only, 2–80 chars)."; }
+function validateName(v)  { return NAME_RE.test(v.trim())  ? "" : "Enter a valid full name (letters only, 2–80 chars)."; }
 function validateEmail(v) { return EMAIL_RE.test(v.trim()) ? "" : "Enter a valid email address."; }
-function validatePhone(v) { return PHONE_RE.test(v.replace(/[\s\-()]/g, "")) ? "" : "Enter a valid local number (digits only, no country code)."; }
 
-// ─── Component ───────────────────────────────────────────────────────────────
+// ─── Component ────────────────────────────────────────────────────────────────
 export default function BrochureModal({ open, onClose, projectId, asset = "brochure", onSuccess, isGate }) {
-  const [dialCode, setDialCode] = useState("+971");
+  const [selectedCountry, setSelectedCountry] = useState(DIAL_CODES[0]); // UAE by default
   const [form, setForm]     = useState({ name: "", email: "", phone: "" });
   const [errors, setErrors] = useState({ name: "", email: "", phone: "" });
   const [touched, setTouched] = useState({ name: false, email: false, phone: false });
   const [status, setStatus] = useState("idle"); // idle | submitting | success | error
 
+  // Reset form when modal opens/closes
   useEffect(() => {
     if (!open) {
       setForm({ name: "", email: "", phone: "" });
@@ -70,6 +29,16 @@ export default function BrochureModal({ open, onClose, projectId, asset = "broch
     }
   }, [open]);
 
+  // Re-validate phone when country code changes (if already touched)
+  useEffect(() => {
+    if (touched.phone) {
+      setErrors((err) => ({
+        ...err,
+        phone: validatePhone(form.phone, selectedCountry.dial),
+      }));
+    }
+  }, [selectedCountry]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!open) return null;
 
   const touch = (field) => setTouched((t) => ({ ...t, [field]: true }));
@@ -78,7 +47,7 @@ export default function BrochureModal({ open, onClose, projectId, asset = "broch
     const e = {
       name:  validateName(form.name),
       email: validateEmail(form.email),
-      phone: validatePhone(form.phone),
+      phone: validatePhone(form.phone, selectedCountry.dial),
     };
     setErrors(e);
     return !e.name && !e.email && !e.phone;
@@ -94,7 +63,7 @@ export default function BrochureModal({ open, onClose, projectId, asset = "broch
       await axios.post(`${API}/leads`, {
         name:        form.name.trim(),
         email:       form.email.trim().toLowerCase(),
-        phone:       `${dialCode}${form.phone.replace(/[\s\-()]/g, "")}`,
+        phone:       `${selectedCountry.dial}${form.phone.replace(/[\s\-()]/g, "")}`,
         project_id:  projectId || null,
         asset,
         source_page: typeof window !== "undefined" ? window.location.pathname : null,
@@ -114,6 +83,12 @@ export default function BrochureModal({ open, onClose, projectId, asset = "broch
   };
 
   const isCallback = asset === "callback" || asset === "call back";
+
+  // Get digit-length hint for the selected country
+  const phoneHint = (() => {
+    const country = selectedCountry.name;
+    return `Enter your ${country} local number (no country code).`;
+  })();
 
   return (
     <div
@@ -204,49 +179,69 @@ export default function BrochureModal({ open, onClose, projectId, asset = "broch
                 )}
               </div>
 
-              {/* Phone with country code selector */}
+              {/* Phone with country code selector and per-country validation */}
               <div>
-                <div className={`flex border-b ${touched.phone && errors.phone ? "border-red-400" : "border-[var(--line)]"} focus-within:border-[var(--ink)]`}>
-                  {/* Dial code picker */}
+                <div
+                  className={`flex border-b ${
+                    touched.phone && errors.phone ? "border-red-400" : "border-[var(--line)]"
+                  } focus-within:border-[var(--ink)]`}
+                >
+                  {/* Country dial-code picker */}
                   <div className="flex items-center gap-1 pr-3 shrink-0">
                     <Phone size={14} className="text-[var(--muted)]" />
                     <select
-                      value={dialCode}
-                      onChange={(e) => setDialCode(e.target.value)}
-                      className="bg-transparent text-sm text-[var(--ink)] focus:outline-none cursor-pointer py-2 pr-1"
+                      value={selectedCountry.code}
+                      onChange={(e) => {
+                        const country = DIAL_CODES.find((c) => c.code === e.target.value);
+                        if (country) setSelectedCountry(country);
+                      }}
+                      className="bg-transparent text-sm text-[var(--ink)] focus:outline-none cursor-pointer py-2 pr-1 max-w-[160px]"
                       aria-label="Country dial code"
+                      data-testid="brochure-dial-code"
                     >
                       {DIAL_CODES.map((c) => (
-                        <option key={c.code} value={c.dial}>
+                        <option key={c.code} value={c.code}>
                           {c.name} ({c.dial})
                         </option>
                       ))}
                     </select>
                   </div>
-                  {/* Number input */}
+
+                  {/* Local number input */}
                   <input
                     required
                     type="tel"
                     placeholder="Local number"
                     value={form.phone}
                     onChange={(e) => {
-                      const v = e.target.value.replace(/[^0-9\s\-()]/g, "");
+                      const v = e.target.value.replace(/[^\d\s\-()]/g, "");
                       setForm({ ...form, phone: v });
-                      if (touched.phone) setErrors((err) => ({ ...err, phone: validatePhone(v) }));
+                      if (touched.phone) {
+                        setErrors((err) => ({
+                          ...err,
+                          phone: validatePhone(v, selectedCountry.dial),
+                        }));
+                      }
                     }}
-                    onBlur={() => { touch("phone"); setErrors((err) => ({ ...err, phone: validatePhone(form.phone) })); }}
+                    onBlur={() => {
+                      touch("phone");
+                      setErrors((err) => ({
+                        ...err,
+                        phone: validatePhone(form.phone, selectedCountry.dial),
+                      }));
+                    }}
                     className="flex-1 bg-transparent text-sm py-2 focus:outline-none text-[var(--ink)] placeholder:text-[var(--muted)]"
                     data-testid="brochure-phone"
                     autoComplete="tel-national"
                     inputMode="tel"
                   />
                 </div>
-                {touched.phone && errors.phone && (
+
+                {touched.phone && errors.phone ? (
                   <p className="text-red-500 text-[11px] mt-1">{errors.phone}</p>
+                ) : (
+                  <p className="text-[10px] text-[var(--muted)] mt-1">{phoneHint}</p>
                 )}
-                <p className="text-[10px] text-[var(--muted)] mt-1">
-                  Select your country code, then enter your local number.
-                </p>
               </div>
 
               {status === "error" && (

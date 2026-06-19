@@ -59,7 +59,7 @@ function FileUploadButton({ onUploadSuccess, label = "Upload File" }) {
   );
 }
 
-const TABS = ["team", "owners", "projects", "blogs", "home", "popup", "reviews", "status"];
+const TABS = ["team", "owners", "projects", "blogs", "home", "popup", "consultations", "reviews", "status"];
 
 const TAB_LABELS = {
   team: "Team",
@@ -68,6 +68,7 @@ const TAB_LABELS = {
   blogs: "Blogs",
   home: "Home",
   popup: "Popup",
+  consultations: "📅 Bookings",
   reviews: "Reviews",
   status: "⚡ Status",
 };
@@ -142,6 +143,7 @@ export default function DeveloperAdmin() {
   const [projects, setProjects] = useState([]);
   const [blogs, setBlogs] = useState([]);
   const [reviews, setReviews] = useState([]);
+  const [consultations, setConsultations] = useState([]);
   const [health, setHealth] = useState(null);
   const [loading, setLoading] = useState(true);
   const [ownerForm, setOwnerForm] = useState({
@@ -185,6 +187,7 @@ export default function DeveloperAdmin() {
   const [projectModal, setProjectModal] = useState(false);
   const [editingProjectId, setEditingProjectId] = useState(null);
   const [projectForm, setProjectForm] = useState(EMPTY_PROJECT_FORM);
+  const [duplicateNameError, setDuplicateNameError] = useState("");
   const [blogModal, setBlogModal] = useState(false);
   const [editingBlogId, setEditingBlogId] = useState(null);
   const [blogForm, setBlogForm] = useState(EMPTY_BLOG_FORM);
@@ -200,6 +203,7 @@ export default function DeveloperAdmin() {
     poster_image_url: "",
     project_link: "",
   });
+  const [popupSaved, setPopupSaved] = useState(false);
   const [homepageForm, setHomepageForm] = useState(DEFAULT_HOMEPAGE_FORM);
   const [actionError, setActionError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -218,7 +222,7 @@ export default function DeveloperAdmin() {
   const load = async () => {
     setLoading(true);
     try {
-      const [t, o, p, b, h, pop, home, r] = await Promise.all([
+      const [t, o, p, b, h, pop, home, r, cons] = await Promise.all([
         apiClient.get("/team"),
         apiClient.get("/admin/owners"),
         apiClient.get("/admin/projects"),
@@ -227,12 +231,14 @@ export default function DeveloperAdmin() {
         apiClient.get("/settings/popup"),
         apiClient.get("/settings/homepage"),
         apiClient.get("/reviews"),
+        apiClient.get("/admin/consultations").catch(() => ({ data: { results: [] } })),
       ]);
       setTeam(t.data.results || []);
       setOwners(o.data.results || []);
       setProjects(p.data.results || []);
       setBlogs(b.data.results || []);
       setReviews(r.data.results || []);
+      setConsultations(cons.data.results || []);
       setHealth(h.data);
       if (pop.data) {
         setPopupForm({
@@ -431,6 +437,7 @@ export default function DeveloperAdmin() {
 
   const openProjectModal = (project = null) => {
     setActionError("");
+    setDuplicateNameError("");
     if (project) {
       setEditingProjectId(project.id);
       setProjectForm({
@@ -460,6 +467,18 @@ export default function DeveloperAdmin() {
     setProjectModal(true);
   };
 
+  /** Check if the typed project name duplicates an existing project (case-insensitive). */
+  const checkDuplicateName = (name) => {
+    const trimmed = name.trim().toLowerCase();
+    if (!trimmed) { setDuplicateNameError(""); return; }
+    const duplicate = projects.find(
+      (p) => p.name.trim().toLowerCase() === trimmed && p.id !== editingProjectId
+    );
+    setDuplicateNameError(
+      duplicate ? `A project named "${duplicate.name}" already exists.` : ""
+    );
+  };
+
   const buildProjectPayload = () => {
     const payload = {
       name: projectForm.name,
@@ -487,6 +506,7 @@ export default function DeveloperAdmin() {
 
   const saveProject = async (e) => {
     e.preventDefault();
+    if (duplicateNameError) return; // block if duplicate name
     setActionError("");
     setSaving(true);
     try {
@@ -502,6 +522,7 @@ export default function DeveloperAdmin() {
         await apiClient.post("/admin/projects", payload);
       }
       setProjectModal(false);
+      setDuplicateNameError("");
       load();
     } catch (err) {
       setActionError(err.response?.data?.detail || "Failed to save project");
@@ -596,6 +617,7 @@ export default function DeveloperAdmin() {
     e.preventDefault();
     setSaving(true);
     setActionError("");
+    setPopupSaved(false);
     try {
       const res = await apiClient.put("/admin/settings/popup", popupForm);
       if (res.data) {
@@ -608,13 +630,39 @@ export default function DeveloperAdmin() {
           btn2_label: res.data.btn2_label || "",
           btn2_link: res.data.btn2_link || "",
           active: res.data.active ?? true,
+          poster_image_url: res.data.poster_image_url || "",
+          project_link: res.data.project_link || "",
         });
-        alert("Popup settings updated successfully!");
+        setPopupSaved(true);
+        setTimeout(() => setPopupSaved(false), 3000);
       }
     } catch (err) {
       setActionError(err.response?.data?.detail || "Failed to update popup settings");
     }
     setSaving(false);
+  };
+
+  const updateConsultationStatus = async (id, newStatus) => {
+    setActionError("");
+    try {
+      await apiClient.patch(`/admin/consultations/${id}`, { status: newStatus });
+      setConsultations((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, status: newStatus } : c))
+      );
+    } catch (err) {
+      setActionError(err.response?.data?.detail || "Failed to update booking status");
+    }
+  };
+
+  const deleteConsultation = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this booking?")) return;
+    setActionError("");
+    try {
+      await apiClient.delete(`/admin/consultations/${id}`);
+      setConsultations((prev) => prev.filter((c) => c.id !== id));
+    } catch (err) {
+      setActionError(err.response?.data?.detail || "Failed to delete booking");
+    }
   };
 
   const saveHomepageSettings = async (e) => {
@@ -1049,8 +1097,14 @@ export default function DeveloperAdmin() {
                   />
                   <FileUploadButton onUploadSuccess={(url) => setPopupForm({ ...popupForm, poster_image_url: url })} label="Upload Poster Image" />
                   {popupForm.poster_image_url && (
-                    <div className="mt-4 max-w-xs border border-[var(--line)] aspect-[3/4] overflow-hidden bg-black">
-                      <img src={resolveMediaUrl(popupForm.poster_image_url)} alt="Poster Preview" className="w-full h-full object-cover" />
+                    <div className="mt-4 max-w-sm border border-[var(--line)] bg-[var(--bg-alt)] overflow-hidden">
+                      <img
+                        src={resolveMediaUrl(popupForm.poster_image_url)}
+                        alt="Poster Preview"
+                        className="w-full h-auto block"
+                        style={{ display: "block" }}
+                      />
+                      <p className="text-[10px] text-[var(--muted)] px-3 py-2">Preview — shown at actual proportions, no cropping.</p>
                     </div>
                   )}
                 </div>
@@ -1069,10 +1123,93 @@ export default function DeveloperAdmin() {
                     ))}
                   </select>
                 </div>
-                <button type="submit" disabled={saving} className="btn-gold w-full !py-3">
-                  {saving ? "Saving..." : "Save Settings"}
-                </button>
+                <div className="flex items-center gap-4">
+                  <button type="submit" disabled={saving} className="btn-gold flex-1 !py-3">
+                    {saving ? "Saving..." : "Save Settings"}
+                  </button>
+                  {popupSaved && (
+                    <span className="text-green-600 text-sm font-medium animate-fade-in">
+                      ✓ Settings saved
+                    </span>
+                  )}
+                </div>
               </form>
+            )}
+
+            {tab === "consultations" && (
+              <div className="bg-white p-8 border border-[var(--line)]">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="font-display text-2xl">Consultation Bookings ({consultations.length})</h2>
+                </div>
+                {consultations.length === 0 ? (
+                  <p className="text-[var(--muted)] text-sm">No consultation bookings found.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-[var(--line)] text-left">
+                          <th className="pb-3 pr-4 text-[10px] uppercase tracking-widest text-[var(--muted)] font-medium">Client Info</th>
+                          <th className="pb-3 pr-4 text-[10px] uppercase tracking-widest text-[var(--muted)] font-medium">Requested Slot</th>
+                          <th className="pb-3 pr-4 text-[10px] uppercase tracking-widest text-[var(--muted)] font-medium">Client Notes</th>
+                          <th className="pb-3 pr-4 text-[10px] uppercase tracking-widest text-[var(--muted)] font-medium">Booked On</th>
+                          <th className="pb-3 pr-4 text-[10px] uppercase tracking-widest text-[var(--muted)] font-medium">Status</th>
+                          <th className="pb-3 text-right text-[10px] uppercase tracking-widest text-[var(--muted)] font-medium">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[var(--line)]">
+                        {consultations.map((c) => (
+                          <tr key={c.id} className="hover:bg-[var(--bg-alt)] transition-colors">
+                            <td className="py-4 pr-4">
+                              <p className="font-medium text-[var(--ink)]">{c.name}</p>
+                              <p className="text-xs text-[var(--muted)]">{c.email}</p>
+                              {c.phone && <p className="text-xs text-[var(--muted)]">{c.phone}</p>}
+                            </td>
+                            <td className="py-4 pr-4 whitespace-nowrap">
+                              <p className="font-medium text-[var(--ink)]">{c.date}</p>
+                              <p className="text-xs text-[var(--gold-deep)]">{c.time_slot} (GST)</p>
+                            </td>
+                            <td className="py-4 pr-4 max-w-[200px] break-words">
+                              <p className="text-xs text-[var(--ink-2)] line-clamp-3" title={c.notes}>
+                                {c.notes || <span className="italic text-[var(--muted)]">No notes</span>}
+                              </p>
+                            </td>
+                            <td className="py-4 pr-4 whitespace-nowrap text-xs text-[var(--muted)]">
+                              {c.created_at ? new Date(c.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
+                            </td>
+                            <td className="py-4 pr-4 whitespace-nowrap">
+                              <select
+                                value={c.status || "pending"}
+                                onChange={(e) => updateConsultationStatus(c.id, e.target.value)}
+                                className={`text-xs px-2.5 py-1.5 border font-semibold focus:outline-none cursor-pointer rounded ${
+                                  c.status === "confirmed"
+                                    ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                                    : c.status === "cancelled"
+                                      ? "bg-red-50 border-red-200 text-red-700"
+                                      : "bg-amber-50 border-amber-200 text-amber-700"
+                                }`}
+                              >
+                                <option value="pending" className="text-amber-700 bg-white">Pending</option>
+                                <option value="confirmed" className="text-emerald-700 bg-white">Confirmed</option>
+                                <option value="cancelled" className="text-red-700 bg-white">Cancelled</option>
+                              </select>
+                            </td>
+                            <td className="py-4 text-right">
+                              <button
+                                type="button"
+                                onClick={() => deleteConsultation(c.id)}
+                                className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"
+                                title="Delete Booking"
+                              >
+                                <Trash size={15} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             )}
 
             {tab === "reviews" && (
@@ -1503,7 +1640,26 @@ export default function DeveloperAdmin() {
                 value={projectForm.id}
                 onChange={(e) => setProjectForm({ ...projectForm, id: e.target.value })}
               />
-              <input required placeholder="Name *" className="input-line w-full" value={projectForm.name} onChange={(e) => setProjectForm({ ...projectForm, name: e.target.value })} />
+              {/* Project Name with real-time duplicate detection */}
+              <div>
+                <input
+                  required
+                  placeholder="Name *"
+                  className={`input-line w-full ${duplicateNameError ? "border-red-400" : ""}`}
+                  value={projectForm.name}
+                  onChange={(e) => {
+                    const name = e.target.value;
+                    setProjectForm({ ...projectForm, name });
+                    checkDuplicateName(name);
+                  }}
+                />
+                {duplicateNameError && (
+                  <p className="text-red-500 text-[11px] mt-1 flex items-center gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="M7.002 11a1 1 0 1 1 2 0 1 1 0 0 1-2 0zM7.1 4.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 4.995z"/></svg>
+                    {duplicateNameError}
+                  </p>
+                )}
+              </div>
               <input placeholder="Developer" className="input-line w-full" value={projectForm.developer} onChange={(e) => setProjectForm({ ...projectForm, developer: e.target.value })} />
               <input required placeholder="Location *" className="input-line w-full" value={projectForm.location} onChange={(e) => setProjectForm({ ...projectForm, location: e.target.value })} />
               <input required placeholder="Emirate *" className="input-line w-full" value={projectForm.emirate} onChange={(e) => setProjectForm({ ...projectForm, emirate: e.target.value })} />
@@ -1538,7 +1694,13 @@ export default function DeveloperAdmin() {
               </div>
               <input placeholder="Amenities (comma-separated)" className="input-line w-full" value={projectForm.amenities} onChange={(e) => setProjectForm({ ...projectForm, amenities: e.target.value })} />
               <textarea placeholder="Description" rows={4} className="w-full border border-[var(--line)] p-3 text-sm" value={projectForm.description} onChange={(e) => setProjectForm({ ...projectForm, description: e.target.value })} />
-              <button type="submit" disabled={saving} className="btn-gold w-full">{saving ? "Saving…" : "Save"}</button>
+              <button
+                type="submit"
+                disabled={saving || !!duplicateNameError}
+                className="btn-gold w-full disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {saving ? "Saving…" : "Save"}
+              </button>
             </form>
           </div>
         </div>

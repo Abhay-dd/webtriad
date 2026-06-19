@@ -10,6 +10,7 @@ function toWhatsApp(phone) {
 }
 import { reallyApi } from "../services/api/realEstateApi";
 import PartnerDevelopers from "../components/PartnerDevelopers";
+import ConsultationModal from "../components/ConsultationModal";
 import {
   MILESTONES,
   REVIEWS,
@@ -49,6 +50,7 @@ export default function Home() {
   const [projects, setProjects] = useState([]);
   const [team, setTeam] = useState([]);
   const [homepageSettings, setHomepageSettings] = useState(DEFAULT_HOMEPAGE_SETTINGS);
+  const [showBooking, setShowBooking] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -74,7 +76,7 @@ export default function Home() {
   const renderFoundersPhotoSection = () => (
     <section className="bg-[var(--bg-alt)]" data-testid="home-founders-photo" key="founders-photo">
       <div className="container-x">
-        <div className="w-full aspect-[21/9] bg-[var(--ink)] overflow-hidden relative" data-reveal>
+        <div className="w-full aspect-[21/9] bg-[var(--ink)] overflow-hidden relative">
           <img 
             src={resolveMediaUrl(homepageSettings.founders_image_url || DEFAULT_HOMEPAGE_SETTINGS.founders_image_url)} 
             alt="Founders of Triad Realty" 
@@ -100,7 +102,7 @@ export default function Home() {
         </div>
 
         {/* Team Group Photo Banner */}
-        <div className="w-full aspect-[21/9] bg-white/5 overflow-hidden relative shadow-lg mb-12 img-zoom border border-white/10" data-reveal>
+        <div className="w-full aspect-[21/9] bg-white/5 overflow-hidden relative shadow-lg mb-12 img-zoom border border-white/10">
           <img 
             src="/group_photo.jpg" 
             alt="Triad Realty Team Group" 
@@ -108,7 +110,7 @@ export default function Home() {
           />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8" data-reveal>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           {team
             .filter((t) => t && t.name && t.tier !== "none" && t.showOnHome !== false)
             .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
@@ -231,7 +233,7 @@ export default function Home() {
         <div className="container-x relative grid grid-cols-1 lg:grid-cols-12 gap-10 items-end">
           <div className="lg:col-span-8">
             <div className="overline text-[var(--gold)]">Triad Realty · Since 2025</div>
-            <h1 className="font-display text-5xl md:text-7xl lg:text-[88px] leading-[0.95] mt-6">
+            <h1 className="font-display text-5xl md:text-7xl lg:text-[88px] leading-[0.95] mt-6" data-reveal>
               The address you<br />will be known for.
             </h1>
           </div>
@@ -243,7 +245,10 @@ export default function Home() {
               <Link to="/projects" className="btn-ghost-light" data-testid="hero-cta-projects">
                 Explore Projects <ArrowRight size={14} />
               </Link>
-              <Link to="/contact" className="text-white text-[12px] uppercase tracking-[0.22em] flex items-center gap-2 px-2 py-3 border-b border-[var(--gold)]">
+              <Link
+                to="/contact?type=consultation"
+                className="text-white text-[12px] uppercase tracking-[0.22em] flex items-center gap-2 px-2 py-3 border-b border-[var(--gold)] bg-transparent cursor-pointer"
+              >
                 Schedule consultation <ArrowUpRight size={14} />
               </Link>
             </div>
@@ -302,7 +307,7 @@ export default function Home() {
             <Link to="/projects" className="btn-ghost" data-testid="launches-view-all">All Projects <ArrowRight size={14} /></Link>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8" data-reveal>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {projects.slice(0, 3).map((p, idx) => (
               <Link
                 to={`/projects/${p.id}`}
@@ -310,7 +315,7 @@ export default function Home() {
                 className="group block bg-white"
                 data-testid={`launch-card-${p.id}`}
               >
-                <div className="img-zoom aspect-[4/5] relative">
+                <div className="img-zoom aspect-[4/5] relative" data-reveal="zoom">
                   <img src={p.image} alt={p.title} className="w-full h-full object-cover" />
                   {p.isFeatured && (
                     <div className="absolute top-4 left-4 bg-[var(--ink)] text-[var(--gold)] overline px-3 py-1">
@@ -360,7 +365,13 @@ export default function Home() {
             </h2>
           </div>
           <div className="lg:col-span-5 flex flex-col gap-4">
-            <Link to="/contact" className="btn-gold" data-testid="cta-book">Book a Consultation <ArrowRight size={14} /></Link>
+            <Link
+              to="/contact?type=consultation"
+              className="btn-gold cursor-pointer"
+              data-testid="cta-book"
+            >
+              Book a Consultation <ArrowRight size={14} />
+            </Link>
             <a href={COMPANY.whatsapp} target="_blank" rel="noreferrer" className="btn-ghost">WhatsApp Us <ArrowUpRight size={14} /></a>
           </div>
         </div>

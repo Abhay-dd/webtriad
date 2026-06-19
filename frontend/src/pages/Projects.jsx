@@ -258,15 +258,12 @@ export default function Projects() {
                         >
                           View Details
                         </Link>
-                        <button
-                          onClick={() => {
-                            setSelectedProjectId(p.id);
-                            setCallbackOpen(true);
-                          }}
+                        <Link
+                          to={`/contact?project=${p.id}&asset=callback`}
                           className="px-6 py-3 font-semibold border border-white/30 text-white hover:bg-white/10 transition-all text-center text-sm tracking-wider uppercase cursor-pointer"
                         >
                           Get a Call Back
-                        </button>
+                        </Link>
                       </div>
                     </div>
                   </div>
