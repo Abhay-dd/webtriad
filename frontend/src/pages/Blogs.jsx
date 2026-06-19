@@ -19,13 +19,7 @@ export function Blogs() {
   const [feature, ...rest] = items;
   return (
     <>
-      <section className="pt-40 pb-12 section-pad bg-white" data-testid="blogs-hero">
-        <div className="container-x">
-          <div className="overline text-[var(--gold-deep)]">Journal</div>
-          <h1 className="font-display text-5xl md:text-7xl mt-6 leading-[0.95]">Notes from the <em className="text-[var(--gold-deep)]">desk.</em></h1>
-        </div>
-      </section>
-      <section className="section-pad pt-0 bg-white">
+      <section className="section-pad pt-40 bg-white">
         <div className="container-x">
           {feature && (
             <Link to={`/blogs/${feature.id}`} className="grid grid-cols-1 lg:grid-cols-12 gap-10 group" data-testid="blog-feature">

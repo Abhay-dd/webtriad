@@ -90,7 +90,7 @@ export default function About() {
         </div>
 
         {/* Founder Cards — directly below the photo, Home-page dark style */}
-        <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-8" data-reveal>
+        <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-8">
           {founders.map((f) => (
             <div key={f.id || f.name} className="group" data-testid={`founder-${(f.name || "").toLowerCase().replace(/\s+/g, "-")}`}>
               <div className="aspect-[3/4] img-zoom bg-[var(--surface-dark,#141414)] relative">
@@ -185,7 +185,7 @@ export default function About() {
           <Link to="/team" className="btn-gold whitespace-nowrap self-start md:self-auto">Meet the Team <ArrowUpRight size={14} /></Link>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8" data-reveal>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           {team.map((t) => (
             <div key={t.id || t.name} className="group" data-testid={`about-team-${(t.name || "").toLowerCase().replace(/\s+/g, "-")}`}>
               <div className="aspect-[3/4] img-zoom bg-[var(--surface-dark,#141414)] relative">
@@ -280,8 +280,8 @@ export default function About() {
         {/* Header Banner Image (50vh) */}
         <div className="w-full h-[50vh] bg-[var(--bg-alt)] overflow-hidden relative border-b border-[var(--line)]">
           <img
-            src="/team_header.jpeg"
-            alt="Triad Realty Team"
+            src="/background.png"
+            alt="Triad Realty Banner"
             className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-700"
           />
         </div>
@@ -335,7 +335,7 @@ export default function About() {
           <div className="overline text-[var(--gold-deep)]">Our Journey</div>
           <h2 className="font-display text-4xl md:text-6xl mt-3 leading-none">A short timeline.</h2>
 
-          <div className="mt-16 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-px bg-[var(--line)]">
+          <div className="mt-16 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-px bg-[var(--line)]" data-reveal>
             {MILESTONES.map((m) => (
               <div key={m.year} className="bg-white p-10">
                 <div className="font-display text-6xl text-[var(--gold-deep)] leading-none">{m.year}</div>

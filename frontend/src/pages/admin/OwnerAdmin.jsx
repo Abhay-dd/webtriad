@@ -5,7 +5,7 @@ import { getAnalyticsSummary } from "../../hooks/useAnalytics";
 import {
   LogOut, Users, TrendingUp, Target, XCircle, PhoneCall,
   Plus, Trash, Eye, BarChart2, UserCheck, Home,
-  Building, Star, Award, Activity, ChevronRight, Search, Menu, X, Edit
+  Building, Star, Award, Activity, ChevronRight, Search, Menu, X, Edit, Calendar
 } from "lucide-react";
 import { resolveMediaUrl } from "../../config";
 
@@ -54,11 +54,12 @@ function FileUploadButton({ onUploadSuccess, label = "Upload File" }) {
   );
 }
 
-const TABS = ["overview", "leads", "staff", "experience", "analytics"];
+const TABS = ["overview", "leads", "consultations", "staff", "experience", "analytics"];
 
 const TAB_LABELS = {
   overview: "Overview",
   leads: "Leads",
+  consultations: "📅 Bookings",
   staff: "Staff",
   experience: "Experience",
   analytics: "Analytics",
@@ -67,6 +68,7 @@ const TAB_LABELS = {
 const TAB_ICONS = {
   overview: Home,
   leads: PhoneCall,
+  consultations: Calendar,
   staff: Users,
   experience: Eye,
   analytics: BarChart2,
@@ -121,6 +123,7 @@ export default function OwnerAdmin() {
   const [team, setTeam] = useState([]);
   const [attendance, setAttendance] = useState([]);
   const [experience, setExperience] = useState([]);
+  const [consultations, setConsultations] = useState([]);
   const [experienceForm, setExperienceForm] = useState({ type: "photo", url: "" });
   const [addingExperience, setAddingExperience] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -145,13 +148,14 @@ export default function OwnerAdmin() {
     };
 
     try {
-      const [s, l, a, p, t, exp] = await Promise.all([
+      const [s, l, a, p, t, exp, cons] = await Promise.all([
         fetchSafe("/admin/staff"),
         fetchSafe("/admin/leads"),
         fetchSafe("/admin/attendance"),
         fetchSafe("/projects"),
         fetchSafe("/team"),
         fetchSafe("/experience"),
+        fetchSafe("/admin/consultations"),
       ]);
       setStaff(Array.isArray(s) ? s : []);
       setLeads(Array.isArray(l) ? l : []);
@@ -159,6 +163,7 @@ export default function OwnerAdmin() {
       setProjects(Array.isArray(p) ? p : []);
       setTeam(Array.isArray(t) ? t : []);
       setExperience(Array.isArray(exp) ? exp : []);
+      setConsultations(Array.isArray(cons) ? cons : []);
     } catch (err) {
       console.error("Owner Dashboard load failed:", err);
     }
@@ -229,6 +234,27 @@ export default function OwnerAdmin() {
     if (!window.confirm("Remove this experience item?")) return;
     await apiClient.delete(`/admin/experience/${id}`);
     load();
+  };
+
+  const updateConsultationStatus = async (id, newStatus) => {
+    try {
+      await apiClient.patch(`/admin/consultations/${id}`, { status: newStatus });
+      setConsultations((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, status: newStatus } : c))
+      );
+    } catch (err) {
+      console.error("Failed to update booking status:", err);
+    }
+  };
+
+  const deleteConsultation = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this booking?")) return;
+    try {
+      await apiClient.delete(`/admin/consultations/${id}`);
+      setConsultations((prev) => prev.filter((c) => c.id !== id));
+    } catch (err) {
+      console.error("Failed to delete booking:", err);
+    }
   };
 
   // ─── Derived stats ───
@@ -833,6 +859,83 @@ export default function OwnerAdmin() {
                       ))}
                     </div>
                   </div>
+                </div>
+              )}
+
+              {/* ══════════ CONSULTATIONS ══════════ */}
+              {tab === "consultations" && (
+                <div className="bg-white p-6 sm:p-8 border border-[var(--line)]">
+                  <div className="flex justify-between items-center mb-6">
+                    <h2 className="font-display text-xl sm:text-2xl text-[var(--ink)]">Consultation Bookings ({consultations.length})</h2>
+                  </div>
+                  {consultations.length === 0 ? (
+                    <p className="text-[var(--muted)] text-sm">No consultation bookings found.</p>
+                  ) : (
+                    <div className="overflow-x-auto admin-table-wrap">
+                      <table className="w-full text-sm min-w-[700px]">
+                        <thead>
+                          <tr className="border-b border-[var(--line)] text-left bg-[var(--bg-alt)]">
+                            <th className="px-4 py-3 text-[10px] uppercase tracking-widest text-[var(--muted)] font-medium">Client Info</th>
+                            <th className="px-4 py-3 text-[10px] uppercase tracking-widest text-[var(--muted)] font-medium">Requested Slot</th>
+                            <th className="px-4 py-3 text-[10px] uppercase tracking-widest text-[var(--muted)] font-medium">Client Notes</th>
+                            <th className="px-4 py-3 text-[10px] uppercase tracking-widest text-[var(--muted)] font-medium">Booked On</th>
+                            <th className="px-4 py-3 text-[10px] uppercase tracking-widest text-[var(--muted)] font-medium">Status</th>
+                            <th className="px-4 py-3 text-right text-[10px] uppercase tracking-widest text-[var(--muted)] font-medium">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[var(--line)]">
+                          {consultations.map((c) => (
+                            <tr key={c.id} className="hover:bg-[var(--bg-alt)] transition-colors">
+                              <td className="px-4 py-3">
+                                <p className="font-medium text-[var(--ink)]">{c.name}</p>
+                                <p className="text-xs text-[var(--muted)]">{c.email}</p>
+                                {c.phone && <p className="text-xs text-[var(--muted)]">{c.phone}</p>}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <p className="font-medium text-[var(--ink)]">{c.date}</p>
+                                <p className="text-xs text-[var(--gold-deep)]">{c.time_slot} (GST)</p>
+                              </td>
+                              <td className="px-4 py-3 max-w-[200px] break-words">
+                                <p className="text-xs text-[var(--ink-2)] line-clamp-3" title={c.notes}>
+                                  {c.notes || <span className="italic text-[var(--muted)]">No notes</span>}
+                                </p>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-xs text-[var(--muted)]">
+                                {c.created_at ? new Date(c.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <select
+                                  value={c.status || "pending"}
+                                  onChange={(e) => updateConsultationStatus(c.id, e.target.value)}
+                                  className={`text-xs px-2.5 py-1.5 border font-semibold focus:outline-none cursor-pointer rounded ${
+                                    c.status === "confirmed"
+                                      ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                                      : c.status === "cancelled"
+                                        ? "bg-red-50 border-red-200 text-red-700"
+                                        : "bg-amber-50 border-amber-200 text-amber-700"
+                                  }`}
+                                >
+                                  <option value="pending" className="text-amber-700 bg-white">Pending</option>
+                                  <option value="confirmed" className="text-emerald-700 bg-white">Confirmed</option>
+                                  <option value="cancelled" className="text-red-700 bg-white">Cancelled</option>
+                                </select>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => deleteConsultation(c.id)}
+                                  className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"
+                                  title="Delete Booking"
+                                >
+                                  <Trash size={15} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               )}
 

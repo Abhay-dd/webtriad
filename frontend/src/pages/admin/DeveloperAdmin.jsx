@@ -59,7 +59,7 @@ function FileUploadButton({ onUploadSuccess, label = "Upload File" }) {
   );
 }
 
-const TABS = ["team", "owners", "projects", "blogs", "home", "popup", "consultations", "reviews", "status"];
+const TABS = ["team", "owners", "projects", "blogs", "home", "popup", "reviews", "status"];
 
 const TAB_LABELS = {
   team: "Team",
@@ -68,7 +68,6 @@ const TAB_LABELS = {
   blogs: "Blogs",
   home: "Home",
   popup: "Popup",
-  consultations: "📅 Bookings",
   reviews: "Reviews",
   status: "⚡ Status",
 };
@@ -202,6 +201,7 @@ export default function DeveloperAdmin() {
     active: true,
     poster_image_url: "",
     project_link: "",
+    popup_type: "text",
   });
   const [popupSaved, setPopupSaved] = useState(false);
   const [homepageForm, setHomepageForm] = useState(DEFAULT_HOMEPAGE_FORM);
@@ -252,6 +252,7 @@ export default function DeveloperAdmin() {
           active: pop.data.active ?? true,
           poster_image_url: pop.data.poster_image_url || "",
           project_link: pop.data.project_link || "",
+          popup_type: pop.data.popup_type || (pop.data.poster_image_url ? "image" : "text"),
         });
       }
       if (home.data) {
@@ -632,6 +633,7 @@ export default function DeveloperAdmin() {
           active: res.data.active ?? true,
           poster_image_url: res.data.poster_image_url || "",
           project_link: res.data.project_link || "",
+          popup_type: res.data.popup_type || (res.data.poster_image_url ? "image" : "text"),
         });
         setPopupSaved(true);
         setTimeout(() => setPopupSaved(false), 3000);
@@ -1073,7 +1075,8 @@ export default function DeveloperAdmin() {
 
             {tab === "popup" && (
               <form onSubmit={savePopupSettings} className="bg-white p-8 border border-[var(--line)] space-y-6 max-w-2xl">
-                <h2 className="font-display text-2xl mb-4">Poster Popup Settings</h2>
+                <h2 className="font-display text-2xl mb-4">Launch Popup / Notification Settings</h2>
+                
                 <div className="flex items-center gap-2 pb-2">
                   <input
                     type="checkbox"
@@ -1083,47 +1086,159 @@ export default function DeveloperAdmin() {
                     className="w-4 h-4 text-[var(--gold)] border-[var(--line)] rounded focus:ring-[var(--gold)]"
                   />
                   <label htmlFor="popup-active" className="text-sm font-medium cursor-pointer">
-                    Enable Poster Popup on site
+                    Enable Popup / Notification on site
                   </label>
                 </div>
+
                 <div>
-                  <label className="block text-xs uppercase tracking-widest text-[var(--muted)] mb-2">Poster Image URL</label>
-                  <input
-                    placeholder="https://images.unsplash.com/... or base64 image data"
-                    required={popupForm.active}
-                    className="input-line w-full"
-                    value={popupForm.poster_image_url}
-                    onChange={(e) => setPopupForm({ ...popupForm, poster_image_url: e.target.value })}
-                  />
-                  <FileUploadButton onUploadSuccess={(url) => setPopupForm({ ...popupForm, poster_image_url: url })} label="Upload Poster Image" />
-                  {popupForm.poster_image_url && (
-                    <div className="mt-4 max-w-sm border border-[var(--line)] bg-[var(--bg-alt)] overflow-hidden">
-                      <img
-                        src={resolveMediaUrl(popupForm.poster_image_url)}
-                        alt="Poster Preview"
-                        className="w-full h-auto block"
-                        style={{ display: "block" }}
+                  <label className="block text-xs uppercase tracking-widest text-[var(--muted)] mb-2">Notification Type</label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <button
+                      type="button"
+                      onClick={() => setPopupForm({ ...popupForm, popup_type: "text" })}
+                      className={`py-3 text-center text-sm border font-medium transition-colors ${
+                        popupForm.popup_type === "text"
+                          ? "border-[var(--gold)] bg-[var(--bg-alt)] text-[var(--ink)]"
+                          : "border-[var(--line)] text-[var(--muted)] hover:text-[var(--ink)]"
+                      }`}
+                    >
+                      Text-based Hot Launch Card
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPopupForm({ ...popupForm, popup_type: "image" })}
+                      className={`py-3 text-center text-sm border font-medium transition-colors ${
+                        popupForm.popup_type === "image"
+                          ? "border-[var(--gold)] bg-[var(--bg-alt)] text-[var(--ink)]"
+                          : "border-[var(--line)] text-[var(--muted)] hover:text-[var(--ink)]"
+                      }`}
+                    >
+                      Poster Image Popup
+                    </button>
+                  </div>
+                </div>
+
+                {popupForm.popup_type === "image" ? (
+                  <>
+                    <div>
+                      <label className="block text-xs uppercase tracking-widest text-[var(--muted)] mb-2">Poster Image URL</label>
+                      <input
+                        placeholder="https://images.unsplash.com/... or base64 image data"
+                        required={popupForm.active && popupForm.popup_type === "image"}
+                        className="input-line w-full"
+                        value={popupForm.poster_image_url}
+                        onChange={(e) => setPopupForm({ ...popupForm, poster_image_url: e.target.value })}
                       />
-                      <p className="text-[10px] text-[var(--muted)] px-3 py-2">Preview — shown at actual proportions, no cropping.</p>
+                      <FileUploadButton onUploadSuccess={(url) => setPopupForm({ ...popupForm, poster_image_url: url })} label="Upload Poster Image" />
+                      {popupForm.poster_image_url && (
+                        <div className="mt-4 max-w-sm border border-[var(--line)] bg-[var(--bg-alt)] overflow-hidden">
+                          <img
+                            src={resolveMediaUrl(popupForm.poster_image_url)}
+                            alt="Poster Preview"
+                            className="w-full h-auto block"
+                            style={{ display: "block" }}
+                          />
+                          <p className="text-[10px] text-[var(--muted)] px-3 py-2">Preview — shown at actual proportions, no cropping.</p>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-xs uppercase tracking-widest text-[var(--muted)] mb-2">Link to Project</label>
-                  <select
-                    className="input-line w-full mt-2 cursor-pointer"
-                    value={popupForm.project_link}
-                    onChange={(e) => setPopupForm({ ...popupForm, project_link: e.target.value })}
-                  >
-                    <option value="">No link (Not clickable)</option>
-                    {projects.map((p) => (
-                      <option key={p.id} value={`/projects/${p.id}`}>
-                        {p.name} ({p.location})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex items-center gap-4">
+                    <div>
+                      <label className="block text-xs uppercase tracking-widest text-[var(--muted)] mb-2">Link to Project</label>
+                      <select
+                        className="input-line w-full mt-2 cursor-pointer"
+                        value={popupForm.project_link}
+                        onChange={(e) => setPopupForm({ ...popupForm, project_link: e.target.value })}
+                      >
+                        <option value="">No link (Not clickable)</option>
+                        {projects.map((p) => (
+                          <option key={p.id} value={`/projects/${p.id}`}>
+                            {p.name} ({p.location})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-4 pt-2">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs uppercase tracking-widest text-[var(--muted)] mb-2">Tag / Ribbon</label>
+                        <input
+                          placeholder="e.g. New Launch, Hot Launch"
+                          className="input-line w-full"
+                          value={popupForm.tag}
+                          onChange={(e) => setPopupForm({ ...popupForm, tag: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs uppercase tracking-widest text-[var(--muted)] mb-2">Title</label>
+                        <input
+                          placeholder="e.g. Marina Aurora — Pre-Launch"
+                          required={popupForm.active && popupForm.popup_type === "text"}
+                          className="input-line w-full"
+                          value={popupForm.title}
+                          onChange={(e) => setPopupForm({ ...popupForm, title: e.target.value })}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs uppercase tracking-widest text-[var(--muted)] mb-2">Description</label>
+                      <textarea
+                        placeholder="Exclusive access to Emaar's newest waterfront tower before the public release..."
+                        rows={3}
+                        required={popupForm.active && popupForm.popup_type === "text"}
+                        className="w-full border border-[var(--line)] p-3 text-sm"
+                        value={popupForm.description}
+                        onChange={(e) => setPopupForm({ ...popupForm, description: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs uppercase tracking-widest text-[var(--muted)] mb-2">Primary Button Label</label>
+                        <input
+                          placeholder="e.g. View Details"
+                          className="input-line w-full"
+                          value={popupForm.btn1_label}
+                          onChange={(e) => setPopupForm({ ...popupForm, btn1_label: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs uppercase tracking-widest text-[var(--muted)] mb-2">Primary Button Link</label>
+                        <input
+                          placeholder="e.g. /projects/marina-aurora"
+                          className="input-line w-full"
+                          value={popupForm.btn1_link}
+                          onChange={(e) => setPopupForm({ ...popupForm, btn1_link: e.target.value })}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs uppercase tracking-widest text-[var(--muted)] mb-2">Secondary Button Label</label>
+                        <input
+                          placeholder="e.g. Compare"
+                          className="input-line w-full"
+                          value={popupForm.btn2_label}
+                          onChange={(e) => setPopupForm({ ...popupForm, btn2_label: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs uppercase tracking-widest text-[var(--muted)] mb-2">Secondary Button Link</label>
+                        <input
+                          placeholder="e.g. /analysis"
+                          className="input-line w-full"
+                          value={popupForm.btn2_link}
+                          onChange={(e) => setPopupForm({ ...popupForm, btn2_link: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-4 pt-4 border-t border-[var(--line)]">
                   <button type="submit" disabled={saving} className="btn-gold flex-1 !py-3">
                     {saving ? "Saving..." : "Save Settings"}
                   </button>
@@ -1136,81 +1251,7 @@ export default function DeveloperAdmin() {
               </form>
             )}
 
-            {tab === "consultations" && (
-              <div className="bg-white p-8 border border-[var(--line)]">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="font-display text-2xl">Consultation Bookings ({consultations.length})</h2>
-                </div>
-                {consultations.length === 0 ? (
-                  <p className="text-[var(--muted)] text-sm">No consultation bookings found.</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-[var(--line)] text-left">
-                          <th className="pb-3 pr-4 text-[10px] uppercase tracking-widest text-[var(--muted)] font-medium">Client Info</th>
-                          <th className="pb-3 pr-4 text-[10px] uppercase tracking-widest text-[var(--muted)] font-medium">Requested Slot</th>
-                          <th className="pb-3 pr-4 text-[10px] uppercase tracking-widest text-[var(--muted)] font-medium">Client Notes</th>
-                          <th className="pb-3 pr-4 text-[10px] uppercase tracking-widest text-[var(--muted)] font-medium">Booked On</th>
-                          <th className="pb-3 pr-4 text-[10px] uppercase tracking-widest text-[var(--muted)] font-medium">Status</th>
-                          <th className="pb-3 text-right text-[10px] uppercase tracking-widest text-[var(--muted)] font-medium">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[var(--line)]">
-                        {consultations.map((c) => (
-                          <tr key={c.id} className="hover:bg-[var(--bg-alt)] transition-colors">
-                            <td className="py-4 pr-4">
-                              <p className="font-medium text-[var(--ink)]">{c.name}</p>
-                              <p className="text-xs text-[var(--muted)]">{c.email}</p>
-                              {c.phone && <p className="text-xs text-[var(--muted)]">{c.phone}</p>}
-                            </td>
-                            <td className="py-4 pr-4 whitespace-nowrap">
-                              <p className="font-medium text-[var(--ink)]">{c.date}</p>
-                              <p className="text-xs text-[var(--gold-deep)]">{c.time_slot} (GST)</p>
-                            </td>
-                            <td className="py-4 pr-4 max-w-[200px] break-words">
-                              <p className="text-xs text-[var(--ink-2)] line-clamp-3" title={c.notes}>
-                                {c.notes || <span className="italic text-[var(--muted)]">No notes</span>}
-                              </p>
-                            </td>
-                            <td className="py-4 pr-4 whitespace-nowrap text-xs text-[var(--muted)]">
-                              {c.created_at ? new Date(c.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
-                            </td>
-                            <td className="py-4 pr-4 whitespace-nowrap">
-                              <select
-                                value={c.status || "pending"}
-                                onChange={(e) => updateConsultationStatus(c.id, e.target.value)}
-                                className={`text-xs px-2.5 py-1.5 border font-semibold focus:outline-none cursor-pointer rounded ${
-                                  c.status === "confirmed"
-                                    ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                                    : c.status === "cancelled"
-                                      ? "bg-red-50 border-red-200 text-red-700"
-                                      : "bg-amber-50 border-amber-200 text-amber-700"
-                                }`}
-                              >
-                                <option value="pending" className="text-amber-700 bg-white">Pending</option>
-                                <option value="confirmed" className="text-emerald-700 bg-white">Confirmed</option>
-                                <option value="cancelled" className="text-red-700 bg-white">Cancelled</option>
-                              </select>
-                            </td>
-                            <td className="py-4 text-right">
-                              <button
-                                type="button"
-                                onClick={() => deleteConsultation(c.id)}
-                                className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"
-                                title="Delete Booking"
-                              >
-                                <Trash size={15} />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
+
 
             {tab === "reviews" && (
               <div className="grid lg:grid-cols-2 gap-8">

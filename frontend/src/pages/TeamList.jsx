@@ -132,8 +132,8 @@ export default function TeamList() {
         {/* Header Banner Image (50vh) */}
         <div className="w-full h-[50vh] bg-white/5 overflow-hidden relative border-b border-white/10">
           <img
-            src="/team_header.jpeg"
-            alt="Triad Realty Team"
+            src="/background.png"
+            alt="Triad Realty Team Banner"
             className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-700 opacity-90 hover:opacity-100"
           />
         </div>
