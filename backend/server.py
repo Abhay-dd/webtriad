@@ -204,6 +204,7 @@ class PopupSettingsIn(BaseModel):
     active: bool
     poster_image_url: Optional[str] = None
     project_link: Optional[str] = None
+    popup_type: Optional[str] = None
 
 
 class ConsultationIn(BaseModel):
@@ -1005,7 +1006,10 @@ async def get_popup_settings():
             "active": True,
             "poster_image_url": "",
             "project_link": "",
+            "popup_type": "text",
         }
+    if "popup_type" not in s:
+        s["popup_type"] = "image" if s.get("poster_image_url") else "text"
     return s
 
 
@@ -1030,15 +1034,15 @@ async def book_consultation(payload: ConsultationIn):
 
 
 @api_router.get("/admin/consultations")
-async def list_consultations(_=Depends(require_developer)):
-    """Developer-only: list all consultation bookings newest-first."""
+async def list_consultations(_=Depends(require_owner_or_developer)):
+    """List all consultation bookings newest-first."""
     items = await db_find("consultations", {})
     items.sort(key=lambda x: x.get("created_at", ""), reverse=True)
     return {"count": len(items), "results": items}
 
 
 @api_router.patch("/admin/consultations/{cid}")
-async def update_consultation_status(cid: str, body: dict, _=Depends(require_developer)):
+async def update_consultation_status(cid: str, body: dict, _=Depends(require_owner_or_developer)):
     """Update consultation status (pending / confirmed / cancelled)."""
     allowed = {"status"}
     updates = {k: v for k, v in body.items() if k in allowed}
@@ -1049,7 +1053,7 @@ async def update_consultation_status(cid: str, body: dict, _=Depends(require_dev
 
 
 @api_router.delete("/admin/consultations/{cid}")
-async def delete_consultation(cid: str, _=Depends(require_developer)):
+async def delete_consultation(cid: str, _=Depends(require_owner_or_developer)):
     ok = await db_delete("consultations", cid)
     if not ok:
         raise HTTPException(404, "Consultation not found")
