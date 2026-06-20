@@ -54,11 +54,11 @@ services:
       - key: MONGO_URI
         sync: false          # Leave empty to use the built-in db_store.json
 
-      # ── CORS — update with your actual Render URL after first deploy ──────────
+      # ── CORS — covers the current Render URL ──────────────────────────────────
       - key: CORS_ORIGINS
         value: https://webtriad-8.onrender.com
       - key: ALLOWED_HOSTS
-        value: webtriad-8.onrender.com
+        value: webtriad-8.onrender.com,*.onrender.com
 
       # ── Optional: external Reelly listings API ────────────────────────────────
       - key: REELLY_API_KEY
