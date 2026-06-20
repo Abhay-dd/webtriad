@@ -63,7 +63,6 @@ ENV REELLY_API_BASE=https://search-listings-production.up.railway.app/v1
 ENV REELLY_API_KEY=
 ENV DEFAULT_ORG_ID=default-org
 ENV TARGET_PROJECT_COUNT=100
-ENV UPLOADS_DIR=../uploaded_media
 # ────────────────────────────────────────────────────────────────────────────
 
 # Expose the default FastAPI port

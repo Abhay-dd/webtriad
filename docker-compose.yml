@@ -18,9 +18,9 @@ services:
       STAFF_EMAIL: ${STAFF_EMAIL:-normal@triad.ae}
       STAFF_PASSWORD: ${STAFF_PASSWORD:?Set STAFF_PASSWORD in your local .env}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in your local .env}
-      UPLOADS_DIR: /app/uploaded_media
+      UPLOADS_DIR: /app/backend/uploads
     volumes:
-      - uploads_data:/app/uploaded_media
+      - uploads_data:/app/backend/uploads
     depends_on:
       - mongodb
     restart: always

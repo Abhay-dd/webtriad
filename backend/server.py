@@ -63,7 +63,7 @@ from security import (
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
-UPLOADS_DIR = Path(os.environ.get("UPLOADS_DIR", str(ROOT_DIR.parent / "uploaded_media"))).resolve()
+UPLOADS_DIR = Path(os.environ.get("UPLOADS_DIR", str(ROOT_DIR / "uploads"))).resolve()
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── Cloudinary configuration (used for persistent image storage on Render) ──
