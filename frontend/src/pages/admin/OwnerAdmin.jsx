@@ -42,7 +42,7 @@ function FileUploadButton({ onUploadSuccess, label = "Upload File" }) {
       <label className="inline-flex items-center justify-center btn-gold !px-3 !py-1 text-xs cursor-pointer w-max select-none border-none">
         <input
           type="file"
-          accept="image/*,video/*"
+          accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/quicktime,video/webm,application/pdf"
           className="hidden"
           onChange={handleChange}
           disabled={uploading}

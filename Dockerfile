@@ -8,7 +8,7 @@ RUN npm install --legacy-peer-deps
 
 # Copy the rest of the frontend code and build it
 COPY frontend/ ./
-RUN npm run build
+RUN GENERATE_SOURCEMAP=false npm run build
 
 # --- Stage 2: Build the FastAPI Backend & Serve Frontend ---
 FROM python:3.10-slim
@@ -37,4 +37,3 @@ WORKDIR /app/backend
 
 # Run FastAPI app
 CMD ["sh", "-c", "uvicorn server:app --host 0.0.0.0 --port ${PORT:-8000}"]
-

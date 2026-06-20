@@ -9,7 +9,7 @@ export const apiClient = axios.create({
 });
 
 apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem("triad_token");
+  const token = sessionStorage.getItem("triad_token");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }

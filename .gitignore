@@ -48,6 +48,8 @@ credentials.json
 backend/.jwt_secret
 db_store.json
 backend/db_store.json
+uploaded_media/
+backend/uploads/
 
 # ─── Logs and debug files ────────────────────────────────────────
 npm-debug.log*

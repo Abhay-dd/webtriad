@@ -7,7 +7,7 @@ services:
     # The buildCommand navigates up to build the React app first.
     rootDir: backend
     buildCommand: |
-      cd ../frontend && npm install --legacy-peer-deps && npm run build && cp -r build ../backend/frontend_build && cd ../backend && pip install -r requirements.txt
+      cd ../frontend && npm install --legacy-peer-deps && GENERATE_SOURCEMAP=false npm run build && cp -r build ../backend/frontend_build && cd ../backend && pip install -r requirements.txt
     startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
     plan: free
 
@@ -21,6 +21,10 @@ services:
       # ── Environment flag (activates JWT secret enforcement) ───────────────────
       - key: ENVIRONMENT
         value: production
+      - key: FORCE_HTTPS
+        value: "true"
+      - key: LOG_FORMAT
+        value: json
 
       # ── Frontend API URL injected at build time ────────────────────────────────
       # Empty string → relative path /api/... (backend serves the frontend)
@@ -53,6 +57,8 @@ services:
       # ── CORS — update with your actual Render URL after first deploy ──────────
       - key: CORS_ORIGINS
         value: https://triad-realty.onrender.com
+      - key: ALLOWED_HOSTS
+        value: triad-realty.onrender.com
 
       # ── Optional: external Reelly listings API ────────────────────────────────
       - key: REELLY_API_KEY

@@ -25,14 +25,28 @@ export default function Reviews() {
 
   const getVideoThumbnail = (url) => {
     if (!url) return null;
-    let videoId = null;
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-    const match = url.match(regExp);
-    if (match && match[2].length === 11) {
-      videoId = match[2];
-    }
+    const videoId = getYouTubeId(url);
     if (videoId) {
       return `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+    }
+    return null;
+  };
+
+  const getYouTubeId = (value) => {
+    if (!value || typeof value !== "string") return null;
+    const iframeSrc = value.match(/<iframe[^>]+src=["']([^"']+)["']/i)?.[1];
+    const candidate = iframeSrc || value;
+    try {
+      const url = new URL(candidate.startsWith("//") ? `https:${candidate}` : candidate);
+      const host = url.hostname.replace(/^www\./, "");
+      if (host === "youtu.be") return url.pathname.slice(1).split("/")[0] || null;
+      if (host === "youtube.com" || host === "youtube-nocookie.com") {
+        if (url.pathname.startsWith("/embed/")) return url.pathname.split("/")[2] || null;
+        return url.searchParams.get("v");
+      }
+    } catch {
+      const match = candidate.match(/(?:youtu\.be\/|embed\/|watch\?v=|[?&]v=)([A-Za-z0-9_-]{11})/);
+      return match?.[1] || null;
     }
     return null;
   };
@@ -40,45 +54,24 @@ export default function Reviews() {
   const getEmbedElement = (youtubeCode) => {
     if (!youtubeCode) return null;
 
-    if (youtubeCode.includes("<iframe")) {
-      const match = youtubeCode.match(/src=["']([^"']+)["']/);
-      if (match && match[1]) {
-        let src = match[1];
-        if (src.startsWith("//")) src = "https:" + src;
-        return (
-          <iframe
-            src={`${src}?autoplay=1`}
-            title="YouTube Video Review"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-            className="absolute inset-0 w-full h-full border-0"
-          />
-        );
-      }
-      return (
-        <div
-          className="absolute inset-0 w-full h-full"
-          dangerouslySetInnerHTML={{ __html: youtubeCode }}
-        />
-      );
-    }
-
-    let videoId = null;
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-    const match = youtubeCode.match(regExp);
-    if (match && match[2].length === 11) {
-      videoId = match[2];
-    }
-
+    const videoId = getYouTubeId(youtubeCode);
     if (videoId) {
       return (
         <iframe
-          src={`https://www.youtube.com/embed/${videoId}?autoplay=1`}
+          src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1`}
           title="YouTube Video Review"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           allowFullScreen
           className="absolute inset-0 w-full h-full border-0"
         />
+      );
+    }
+
+    if (youtubeCode.includes("<iframe")) {
+      return (
+        <div className="absolute inset-0 flex items-center justify-center bg-black text-white/70 text-sm">
+          Unsupported video embed
+        </div>
       );
     }
 

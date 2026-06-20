@@ -2,15 +2,23 @@
 
 import logging
 import os
+import re
+import json
+import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Optional
 
+import hashlib
 import httpx
 from dotenv import load_dotenv
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, status, UploadFile, File
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response, status, UploadFile, File
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from db import (
@@ -23,6 +31,7 @@ from db import (
     db_find_one,
     db_insert,
     db_update,
+    db_update_one,
 )
 from deps import (
     get_current_user,
@@ -31,7 +40,8 @@ from deps import (
     require_owner_or_developer,
     require_staff_or_owner,
 )
-from rate_limit import check_rate_limit
+from middleware import RateLimitMiddleware, SecurityHeadersMiddleware
+from rate_limit import check_account_lockout, client_ip, record_failed_login, clear_failed_logins
 from seed_data import BLOGS, CAREERS, PROJECTS, GALLERY
 from security import (
     ROLE_DEVELOPER,
@@ -41,23 +51,27 @@ from security import (
     has_strong_jwt_secret,
     hash_password,
     verify_password,
+    validate_password_strength,
+    generate_reset_token,
+    verify_reset_token,
+    generate_refresh_token,
+    hash_refresh_token,
 )
 
 ROOT_DIR = Path(__file__).parent
-_uploads_dir = os.path.join(str(ROOT_DIR), "uploads")
-os.makedirs(_uploads_dir, exist_ok=True)
 load_dotenv(ROOT_DIR / ".env")
+UPLOADS_DIR = Path(os.environ.get("UPLOADS_DIR", str(ROOT_DIR.parent / "uploaded_media"))).resolve()
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 DEFAULT_ORG_ID = os.environ.get("DEFAULT_ORG_ID", "default-org")
 
-# Credentials must be set in .env — no hardcoded fallback passwords in production.
+# Credentials must be set in .env — missing values raise RuntimeError at startup.
 DEVELOPER_EMAIL = os.environ.get("DEVELOPER_EMAIL", "developer@triad.ae")
-DEVELOPER_PASSWORD = os.environ.get("DEVELOPER_PASSWORD") or "developer"
+DEVELOPER_PASSWORD = os.environ.get("DEVELOPER_PASSWORD", "")
 OWNER_EMAIL = os.environ.get("OWNER_EMAIL", "owner@triad.ae")
-OWNER_PASSWORD = os.environ.get("OWNER_PASSWORD") or "owner"
-LEGACY_OWNER_PASSWORD = "onwer"
+OWNER_PASSWORD = os.environ.get("OWNER_PASSWORD", "")
 STAFF_EMAIL = os.environ.get("STAFF_EMAIL", "normal@triad.ae")
-STAFF_PASSWORD = os.environ.get("STAFF_PASSWORD") or "normal"
+STAFF_PASSWORD = os.environ.get("STAFF_PASSWORD", "")
 
 # Email aliases: any key email will resolve to its value before lookup
 EMAIL_ALIASES: dict[str, str] = {
@@ -69,18 +83,180 @@ REELLY_BASE = os.environ.get(
 )
 REELLY_API_KEY = os.environ.get("REELLY_API_KEY", "")
 TARGET_PROJECT_COUNT = int(os.environ.get("TARGET_PROJECT_COUNT", "100"))
+ENVIRONMENT = os.environ.get("ENVIRONMENT", os.environ.get("APP_ENV", "development")).lower()
+IS_PROD = ENVIRONMENT in {"production", "prod"}
+
+
+class JsonFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        payload = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
+        for key in (
+            "event",
+            "request_id",
+            "client_ip",
+            "method",
+            "path",
+            "status_code",
+            "user_id",
+            "email",
+            "role",
+            "policy",
+            "duration_ms",
+        ):
+            value = getattr(record, key, None)
+            if value is not None:
+                payload[key] = value
+        if record.exc_info:
+            payload["exception"] = self.formatException(record.exc_info)
+        return json.dumps(payload, separators=(",", ":"))
+
+
+def configure_logging() -> None:
+    handler = logging.StreamHandler()
+    if os.environ.get("LOG_FORMAT", "json" if IS_PROD else "text").lower() == "json":
+        handler.setFormatter(JsonFormatter())
+    else:
+        handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+    root_logger = logging.getLogger()
+    root_logger.handlers = [handler]
+    root_logger.setLevel(os.environ.get("LOG_LEVEL", "INFO").upper())
+
+
+configure_logging()
 
 app = FastAPI(title="Triad Realty API")
 api_router = APIRouter(prefix="/api")
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+# ---------------------------------------------------------------------------
+# CORS — must be registered before any route is included
+# ---------------------------------------------------------------------------
+_cors_origins_raw = os.environ.get(
+    "CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"
+)
+_cors_origins = [o.strip() for o in _cors_origins_raw.split(",") if o.strip()]
+if "*" in _cors_origins:
+    if IS_PROD:
+        raise RuntimeError("CORS_ORIGINS cannot contain '*' in production")
+    _cors_origins = [origin for origin in _cors_origins if origin != "*"]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
+    expose_headers=["Retry-After", "X-Request-ID"],
+)
+
 logger = logging.getLogger(__name__)
 reelly_client: Optional[httpx.AsyncClient] = None
 _server_start_time: datetime = datetime.now(timezone.utc)
 
+_allowed_hosts_raw = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1,*.localhost")
+_allowed_hosts = [h.strip() for h in _allowed_hosts_raw.split(",") if h.strip()]
+if IS_PROD and ("*" in _allowed_hosts or not _allowed_hosts):
+    raise RuntimeError("ALLOWED_HOSTS must list explicit production hostnames")
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=_allowed_hosts)
+if IS_PROD and os.environ.get("FORCE_HTTPS", "true").lower() == "true":
+    app.add_middleware(HTTPSRedirectMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RateLimitMiddleware)
+
 
 def now_iso():
     return datetime.now(timezone.utc).isoformat()
+
+
+@app.middleware("http")
+async def request_context_middleware(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+    request.state.request_id = request_id
+    started = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        duration_ms = round((time.perf_counter() - started) * 1000, 2)
+        logger.exception(
+            "api.unhandled_exception",
+            extra={
+                "event": "api.unhandled_exception",
+                "request_id": request_id,
+                "client_ip": client_ip(request),
+                "method": request.method,
+                "path": request.url.path,
+                "duration_ms": duration_ms,
+            },
+        )
+        raise
+
+    duration_ms = round((time.perf_counter() - started) * 1000, 2)
+    response.headers["X-Request-ID"] = request_id
+    if response.status_code >= 400:
+        level = logging.ERROR if response.status_code >= 500 else logging.WARNING
+        logger.log(
+            level,
+            "api.request_error",
+            extra={
+                "event": "api.request_error",
+                "request_id": request_id,
+                "client_ip": client_ip(request),
+                "method": request.method,
+                "path": request.url.path,
+                "status_code": response.status_code,
+                "duration_ms": duration_ms,
+            },
+        )
+    return response
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    detail = exc.detail
+    if IS_PROD and exc.status_code >= 500:
+        detail = "An internal server error occurred."
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": detail},
+        headers={**(exc.headers or {}), "X-Request-ID": getattr(request.state, "request_id", "")},
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    logger.warning(
+        "api.validation_error",
+        extra={
+            "event": "api.validation_error",
+            "request_id": getattr(request.state, "request_id", None),
+            "client_ip": client_ip(request),
+            "method": request.method,
+            "path": request.url.path,
+            "status_code": status.HTTP_422_UNPROCESSABLE_ENTITY,
+        },
+    )
+    detail = "Invalid request." if IS_PROD else exc.errors()
+    return JSONResponse(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, content={"detail": detail})
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.exception(
+        "api.internal_error",
+        extra={
+            "event": "api.internal_error",
+            "request_id": getattr(request.state, "request_id", None),
+            "client_ip": client_ip(request),
+            "method": request.method,
+            "path": request.url.path,
+            "status_code": status.HTTP_500_INTERNAL_SERVER_ERROR,
+        },
+    )
+    detail = "An internal server error occurred." if IS_PROD else str(exc)
+    return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"detail": detail})
 
 
 # ----------------------------- Models -----------------------------
@@ -160,6 +336,20 @@ class Application(ApplicationIn):
 class LoginIn(BaseModel):
     email: EmailStr
     password: str
+
+
+class ChangePasswordIn(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class ForgotPasswordIn(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordIn(BaseModel):
+    token: str
+    new_password: str
 
 
 class UserCreate(BaseModel):
@@ -389,6 +579,27 @@ def user_public(u: dict) -> dict:
     }
 
 
+async def revoke_user_refresh_tokens(user_id: str) -> None:
+    user_tokens = await db_find("refresh_tokens", {"user_id": user_id})
+    for token in user_tokens:
+        if not token.get("is_revoked", False):
+            await db_update("refresh_tokens", token["id"], {"is_revoked": True})
+
+
+async def set_user_password(user_id: str, password: str, extra_updates: Optional[dict] = None):
+    changed_at = now_iso()
+    updates = {
+        "password_hash": hash_password(password),
+        "password_changed_at": changed_at,
+        "session_version": str(uuid.uuid4()),
+    }
+    if extra_updates:
+        updates.update(extra_updates)
+    updated = await db_update("users", user_id, updates)
+    await revoke_user_refresh_tokens(user_id)
+    return updated
+
+
 # ----------------------------- Startup seed -----------------------------
 async def seed_content():
     if await db_count("projects") == 0:
@@ -565,23 +776,21 @@ async def _upsert_default_user(
     role: str,
     name: str,
     organization_id: Optional[str],
-    legacy_passwords: tuple[str, ...] = (),
 ):
     existing = await db_find_one("users", {"email": email.strip().lower()})
     created_at = existing.get("created_at") if existing else now_iso()
 
-    # The password from env configuration is the source of truth for seeded accounts.
-    # If the user exists but the stored hash doesn't match the current configured env password,
-    # we update the stored hash to match it. This prevents the account password from getting
-    # out of sync with the env file.
+    # Seed passwords are only used when the account is first created. Existing
+    # accounts keep their current hash so a reset is not undone on restart.
     p_hash = existing["password_hash"] if existing else hash_password(password)
-    if existing:
-        if not verify_password(password, p_hash):
-            p_hash = hash_password(password)
+    password_changed_at = existing.get("password_changed_at") if existing else created_at
+    session_version = existing.get("session_version") if existing else str(uuid.uuid4())
 
     doc = {
         "email": email.strip().lower(),
         "password_hash": p_hash,
+        "password_changed_at": password_changed_at,
+        "session_version": session_version,
         "name": name,
         "role": role,
         "organization_id": organization_id,
@@ -621,7 +830,6 @@ async def seed_default_users():
         role=ROLE_OWNER,
         name="Organization Owner",
         organization_id=DEFAULT_ORG_ID,
-        legacy_passwords=(LEGACY_OWNER_PASSWORD,),
     )
     await _upsert_default_user(
         email=STAFF_EMAIL,
@@ -638,8 +846,22 @@ async def seed_default_users():
 async def on_startup():
     global reelly_client
     environment = os.environ.get("ENVIRONMENT", os.environ.get("APP_ENV", "development")).lower()
-    if environment in {"production", "prod"} and not has_strong_jwt_secret():
+    is_prod = environment in {"production", "prod"}
+
+    if is_prod and not has_strong_jwt_secret():
         raise RuntimeError("JWT_SECRET must be set to a strong value in production")
+
+    # Require all three seeded account passwords to be explicitly configured.
+    for var_name, value in [
+        ("DEVELOPER_PASSWORD", DEVELOPER_PASSWORD),
+        ("OWNER_PASSWORD",     OWNER_PASSWORD),
+        ("STAFF_PASSWORD",     STAFF_PASSWORD),
+    ]:
+        if not value:
+            raise RuntimeError(
+                f"{var_name} must be set in .env. "
+                "Refusing to start with an empty password."
+            )
 
     reelly_client = httpx.AsyncClient(timeout=30.0)
     await seed_content()
@@ -657,18 +879,74 @@ async def shutdown_db_client():
 
 # ----------------------------- Auth -----------------------------
 @api_router.post("/auth/login")
-async def login(payload: LoginIn, request: Request):
-    check_rate_limit(request, limit=10, window_sec=60)
+async def login(payload: LoginIn, request: Request, response: Response):
     raw_email = payload.email.strip().lower()
+
+    # Per-account lockout check (5 failures in 15 min)
+    check_account_lockout(raw_email)
+
     # Resolve any known email aliases (e.g. typo variants)
     lookup_email = EMAIL_ALIASES.get(raw_email, raw_email)
     user = await db_find_one("users", {"email": lookup_email})
     # Also try the raw email directly in case alias target doesn't exist
     if not user and lookup_email != raw_email:
         user = await db_find_one("users", {"email": raw_email})
+
     if not user or not verify_password(payload.password, user["password_hash"]):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-    token = create_access_token(user["id"], user["role"], user.get("organization_id"))
+        # Record failure and give a generic message (prevents user enumeration)
+        record_failed_login(raw_email)
+        logger.warning(
+            "auth.login.failed",
+            extra={
+                "event": "auth.login.failed",
+                "request_id": getattr(request.state, "request_id", None),
+                "client_ip": client_ip(request),
+                "email": raw_email[:3] + "***",
+                "status_code": status.HTTP_401_UNAUTHORIZED,
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
+        )
+
+    # Success: clear the lockout counter
+    clear_failed_logins(raw_email)
+
+    token = create_access_token(
+        user["id"],
+        user["role"],
+        user.get("organization_id"),
+        user.get("session_version"),
+    )
+    
+    # Generate and store refresh token
+    refresh_token = generate_refresh_token()
+    rf_hash = hash_refresh_token(refresh_token)
+    await db_insert(
+        "refresh_tokens",
+        {
+            "id": str(uuid.uuid4()),
+            "user_id": user["id"],
+            "token_hash": rf_hash,
+            "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+            "is_revoked": False,
+            "replaced_by_hash": None,
+            "created_at": now_iso(),
+        },
+    )
+
+    ENVIRONMENT = os.environ.get("ENVIRONMENT", "development")
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=True if ENVIRONMENT == "production" else False,
+        samesite="lax",
+        path="/api/auth",
+        max_age=7 * 24 * 60 * 60,
+    )
+
     att_id = str(uuid.uuid4())
     await db_insert(
         "attendance",
@@ -680,20 +958,164 @@ async def login(payload: LoginIn, request: Request):
             "logout_at": None,
         },
     )
+    logger.info(
+        "auth.login.success",
+        extra={
+            "event": "auth.login.success",
+            "request_id": getattr(request.state, "request_id", None),
+            "client_ip": client_ip(request),
+            "user_id": user["id"],
+            "role": user["role"],
+        },
+    )
     return {
         "access_token": token,
         "token_type": "bearer",
         "user": user_public(user),
         "attendance_id": att_id,
+        "refresh_token": refresh_token,
     }
 
 
 @api_router.post("/auth/logout")
-async def logout(user=Depends(get_current_user)):
+async def logout(
+    request: Request,
+    response: Response,
+    user=Depends(get_current_user),
+):
+    # Revoke current refresh token if present in cookies
+    refresh_token = request.cookies.get("refresh_token")
+    if refresh_token:
+        rf_hash = hash_refresh_token(refresh_token)
+        token_record = await db_find_one("refresh_tokens", {"token_hash": rf_hash})
+        if token_record:
+            await db_update("refresh_tokens", token_record["id"], {"is_revoked": True})
+    
+    response.delete_cookie(key="refresh_token", path="/api/auth")
+
     records = await db_find("attendance", {"user_id": user["id"], "logout_at": None})
     for rec in records:
         await db_update("attendance", rec["id"], {"logout_at": now_iso()})
+    logger.info(
+        "auth.logout",
+        extra={
+            "event": "auth.logout",
+            "request_id": getattr(request.state, "request_id", None),
+            "client_ip": client_ip(request),
+            "user_id": user["id"],
+            "role": user["role"],
+        },
+    )
     return {"detail": "Logged out"}
+
+
+class RefreshIn(BaseModel):
+    refresh_token: Optional[str] = None
+
+
+@api_router.post("/auth/refresh")
+async def refresh_token_endpoint(
+    request: Request,
+    response: Response,
+    payload: Optional[RefreshIn] = None,
+):
+    # Prioritize payload/body first, then fall back to cookies
+    refresh_token = None
+    if payload and payload.refresh_token:
+        refresh_token = payload.refresh_token
+    else:
+        refresh_token = request.cookies.get("refresh_token")
+
+    if not refresh_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token missing",
+        )
+
+    rf_hash = hash_refresh_token(refresh_token)
+    token_record = await db_find_one("refresh_tokens", {"token_hash": rf_hash})
+
+    if not token_record:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+        )
+
+    # Check expiration
+    expires_at = datetime.fromisoformat(token_record["expires_at"])
+    if expires_at < datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token expired",
+        )
+
+    user_id = token_record["user_id"]
+
+    # Check revocation / token reuse detection
+    if token_record.get("is_revoked", False):
+        # Revoke all tokens for this user!
+        user_tokens = await db_find("refresh_tokens", {"user_id": user_id})
+        for t in user_tokens:
+            await db_update("refresh_tokens", t["id"], {"is_revoked": True})
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token reuse detected. All sessions revoked.",
+        )
+
+    # Revoke old token
+    new_token = generate_refresh_token()
+    new_hash = hash_refresh_token(new_token)
+    await db_update(
+        "refresh_tokens",
+        token_record["id"],
+        {"is_revoked": True, "replaced_by_hash": new_hash},
+    )
+
+    # Insert new refresh token record
+    await db_insert(
+        "refresh_tokens",
+        {
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "token_hash": new_hash,
+            "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+            "is_revoked": False,
+            "replaced_by_hash": None,
+            "created_at": now_iso(),
+        },
+    )
+
+    user = await db_find_one("users", {"id": user_id})
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
+
+    access_token = create_access_token(
+        user["id"],
+        user["role"],
+        user.get("organization_id"),
+        user.get("session_version"),
+    )
+
+    ENVIRONMENT = os.environ.get("ENVIRONMENT", "development")
+    response.set_cookie(
+        key="refresh_token",
+        value=new_token,
+        httponly=True,
+        secure=True if ENVIRONMENT == "production" else False,
+        samesite="lax",
+        path="/api/auth",
+        max_age=7 * 24 * 60 * 60,
+    )
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": user_public(user),
+        "refresh_token": new_token,
+    }
 
 
 @api_router.get("/auth/me")
@@ -701,9 +1123,132 @@ async def auth_me(user=Depends(get_current_user)):
     return user_public(user)
 
 
+@api_router.post("/auth/change-password")
+async def change_password(payload: ChangePasswordIn, user=Depends(get_current_user)):
+    """Authenticated users can change their own password.
+    Requires the current password to be supplied correctly.
+    """
+    if not verify_password(payload.current_password, user["password_hash"]):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Current password is incorrect",
+        )
+    try:
+        validate_password_strength(payload.new_password)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    await set_user_password(user["id"], payload.new_password)
+    logger.info(
+        "auth.password_changed",
+        extra={
+            "event": "auth.password_changed",
+            "user_id": user["id"],
+            "role": user["role"],
+        },
+    )
+    return {"detail": "Password updated successfully. Please log in again."}
+
+
+@api_router.post("/auth/forgot-password")
+async def forgot_password(payload: ForgotPasswordIn, request: Request):
+    """Generate a time-limited password-reset token for the given email.
+
+    In production you would email the plain token to the user.  For now the
+    token is returned in the response body so it can be used in development
+    without an SMTP server.
+    """
+    email = payload.email.strip().lower()
+    user = await db_find_one("users", {"email": email})
+    # Always return 200 to prevent email enumeration
+    if not user:
+        return {"detail": "If that email exists, a reset link has been issued."}
+    plain_token, hashed_token, expiry_iso = generate_reset_token()
+    await db_update(
+        "users",
+        user["id"],
+        {
+            "reset_token_hash": hashed_token,
+            "reset_token_expiry": expiry_iso,
+        },
+    )
+    logger.info(
+        "auth.password_reset.issued",
+        extra={
+            "event": "auth.password_reset.issued",
+            "request_id": getattr(request.state, "request_id", None),
+            "client_ip": client_ip(request),
+            "user_id": user["id"],
+        },
+    )
+    response = {"detail": "If that email exists, a reset link has been issued."}
+    environment = os.environ.get("ENVIRONMENT", os.environ.get("APP_ENV", "development")).lower()
+    if environment not in {"production", "prod"}:
+        response.update({"reset_token": plain_token, "expires_at": expiry_iso})
+    return response
+
+
+@api_router.post("/auth/reset-password")
+async def reset_password(payload: ResetPasswordIn, request: Request):
+    """Exchange a valid reset token for a new password."""
+    try:
+        validate_password_strength(payload.new_password)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+
+    candidate_hash = hashlib.sha256(payload.token.encode()).hexdigest()
+    target_user = await db_find_one("users", {"reset_token_hash": candidate_hash})
+    if target_user and not verify_reset_token(
+        payload.token,
+        target_user["reset_token_hash"],
+        target_user.get("reset_token_expiry", ""),
+    ):
+        target_user = None
+
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token",
+        )
+
+    changed_at = now_iso()
+    updated = await db_update_one(
+        "users",
+        {"id": target_user["id"], "reset_token_hash": candidate_hash},
+        {
+            "password_hash": hash_password(payload.new_password),
+            "password_changed_at": changed_at,
+            "session_version": str(uuid.uuid4()),
+            "reset_token_hash": None,
+            "reset_token_expiry": None,
+        },
+    )
+    if not updated:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token",
+        )
+
+    await revoke_user_refresh_tokens(target_user["id"])
+    logger.info(
+        "auth.password_reset.completed",
+        extra={
+            "event": "auth.password_reset.completed",
+            "request_id": getattr(request.state, "request_id", None),
+            "client_ip": client_ip(request),
+            "user_id": target_user["id"],
+        },
+    )
+
+    return {"detail": "Password has been reset successfully"}
+
+
 # ----------------------------- Developer: owners & orgs -----------------------------
 @api_router.post("/admin/owners")
 async def create_owner(payload: OwnerCreate, _=Depends(require_developer)):
+    try:
+        validate_password_strength(payload.password)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     existing = await db_find_one("users", {"email": payload.email.lower()})
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -717,12 +1262,18 @@ async def create_owner(payload: OwnerCreate, _=Depends(require_developer)):
         "id": user_id,
         "email": payload.email.lower(),
         "password_hash": hash_password(payload.password),
+        "password_changed_at": now_iso(),
+        "session_version": str(uuid.uuid4()),
         "name": payload.name,
         "role": ROLE_OWNER,
         "organization_id": org_id,
         "created_at": now_iso(),
     }
     await db_insert("users", doc)
+    logger.info(
+        "auth.account_created",
+        extra={"event": "auth.account_created", "user_id": user_id, "role": ROLE_OWNER},
+    )
     return {"user": user_public(doc), "organization": {"id": org_id, "name": payload.organization_name}}
 
 
@@ -770,10 +1321,18 @@ async def patch_owner(owner_id: str, payload: OwnerPatch, _=Depends(require_deve
             raise HTTPException(status_code=400, detail="Email already registered")
         updates["email"] = email_lower
     if payload.password is not None:
+        try:
+            validate_password_strength(payload.password)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
         updates["password_hash"] = hash_password(payload.password)
+        updates["password_changed_at"] = now_iso()
+        updates["session_version"] = str(uuid.uuid4())
         
     if updates:
         await db_update("users", owner_id, updates)
+        if "password_hash" in updates:
+            await revoke_user_refresh_tokens(owner_id)
         
     if payload.organization_name is not None and owner.get("organization_id"):
         await db_update("organizations", owner["organization_id"], {"name": payload.organization_name})
@@ -799,6 +1358,10 @@ async def delete_owner(owner_id: str, _=Depends(require_developer)):
 # ----------------------------- Owner: staff -----------------------------
 @api_router.post("/admin/staff")
 async def create_staff(payload: UserCreate, user=Depends(require_owner)):
+    try:
+        validate_password_strength(payload.password)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     existing = await db_find_one("users", {"email": payload.email.lower()})
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -806,12 +1369,18 @@ async def create_staff(payload: UserCreate, user=Depends(require_owner)):
         "id": str(uuid.uuid4()),
         "email": payload.email.lower(),
         "password_hash": hash_password(payload.password),
+        "password_changed_at": now_iso(),
+        "session_version": str(uuid.uuid4()),
         "name": payload.name,
         "role": ROLE_STAFF,
         "organization_id": user["organization_id"],
         "created_at": now_iso(),
     }
     await db_insert("users", doc)
+    logger.info(
+        "auth.account_created",
+        extra={"event": "auth.account_created", "user_id": doc["id"], "role": ROLE_STAFF},
+    )
     return user_public(doc)
 
 
@@ -846,10 +1415,18 @@ async def patch_staff(staff_id: str, payload: StaffPatch, user=Depends(require_o
             raise HTTPException(status_code=400, detail="Email already registered")
         updates["email"] = email_lower
     if payload.password is not None:
+        try:
+            validate_password_strength(payload.password)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
         updates["password_hash"] = hash_password(payload.password)
+        updates["password_changed_at"] = now_iso()
+        updates["session_version"] = str(uuid.uuid4())
         
     if updates:
         await db_update("users", staff_id, updates)
+        if "password_hash" in updates:
+            await revoke_user_refresh_tokens(staff_id)
         
     updated_staff = await db_find_one("users", {"id": staff_id})
     return user_public(updated_staff)
@@ -899,45 +1476,58 @@ async def admin_clear_leads(user=Depends(require_owner)):
 
 
 @api_router.get("/leads")
-async def list_leads(_=Depends(require_owner_or_developer)):
-    items = await db_find("leads")
+async def list_leads(user=Depends(require_owner_or_developer)):
+    # Developer has platform-wide visibility; owners only see their org's leads
+    if user["role"] == ROLE_DEVELOPER:
+        items = await db_find("leads")
+    else:
+        items = await db_find("leads", {"organization_id": user["organization_id"]})
     return {"count": len(items), "results": items}
 
 
 @api_router.get("/contacts")
-async def list_contacts(_=Depends(require_owner_or_developer)):
-    items = await db_find("contacts")
+async def list_contacts(user=Depends(require_owner_or_developer)):
+    # Developer has platform-wide visibility; owners only see their org's contacts
+    if user["role"] == ROLE_DEVELOPER:
+        items = await db_find("contacts")
+    else:
+        items = await db_find("contacts", {"organization_id": user["organization_id"]})
     return {"count": len(items), "results": items}
 
 
 @api_router.get("/applications")
-async def list_applications(_=Depends(require_owner_or_developer)):
-    items = await db_find("applications")
+async def list_applications(user=Depends(require_owner_or_developer)):
+    # Developer has platform-wide visibility; owners only see their org's applications
+    if user["role"] == ROLE_DEVELOPER:
+        items = await db_find("applications")
+    else:
+        items = await db_find("applications", {"organization_id": user["organization_id"]})
     return {"count": len(items), "results": items}
 
 
 # ----------------------------- Public POST (rate limited) -----------------------------
 @api_router.post("/leads", response_model=Lead)
 async def create_lead(payload: LeadIn, request: Request):
-    check_rate_limit(request)
-    lead = Lead(**payload.model_dump())
+    lead = Lead(**payload.model_dump(), organization_id=DEFAULT_ORG_ID)
     await db_insert("leads", lead.model_dump())
     return lead
 
 
 @api_router.post("/contacts", response_model=Contact)
 async def create_contact(payload: ContactIn, request: Request):
-    check_rate_limit(request)
     c = Contact(**payload.model_dump())
-    await db_insert("contacts", c.model_dump())
+    c_doc = c.model_dump()
+    c_doc["organization_id"] = DEFAULT_ORG_ID
+    await db_insert("contacts", c_doc)
     return c
 
 
 @api_router.post("/applications", response_model=Application)
 async def create_application(payload: ApplicationIn, request: Request):
-    check_rate_limit(request)
     a = Application(**payload.model_dump())
-    await db_insert("applications", a.model_dump())
+    a_doc = a.model_dump()
+    a_doc["organization_id"] = DEFAULT_ORG_ID
+    await db_insert("applications", a_doc)
     return a
 
 
@@ -1020,6 +1610,7 @@ async def book_consultation(payload: ConsultationIn):
     """Public endpoint — record a consultation booking."""
     doc = {
         "id": str(uuid.uuid4()),
+        "organization_id": DEFAULT_ORG_ID,
         "name": payload.name,
         "email": payload.email,
         "phone": payload.phone or "",
@@ -1034,29 +1625,46 @@ async def book_consultation(payload: ConsultationIn):
 
 
 @api_router.get("/admin/consultations")
-async def list_consultations(_=Depends(require_owner_or_developer)):
-    """List all consultation bookings newest-first."""
+async def list_consultations(user=Depends(require_owner_or_developer)):
+    """List consultation bookings. Developers see all; owners see only their org."""
     items = await db_find("consultations", {})
+    if user["role"] != ROLE_DEVELOPER:
+        org_id = user["organization_id"]
+        items = [i for i in items if i.get("organization_id") == org_id or i.get("organization_id") is None]
     items.sort(key=lambda x: x.get("created_at", ""), reverse=True)
     return {"count": len(items), "results": items}
 
 
+class ConsultationStatusIn(BaseModel):
+    """Typed payload for consultation status updates."""
+    status: str = Field(..., pattern="^(pending|confirmed|cancelled)$")
+
+
 @api_router.patch("/admin/consultations/{cid}")
-async def update_consultation_status(cid: str, body: dict, _=Depends(require_owner_or_developer)):
+async def update_consultation_status(cid: str, payload: ConsultationStatusIn, user=Depends(require_owner_or_developer)):
     """Update consultation status (pending / confirmed / cancelled)."""
-    allowed = {"status"}
-    updates = {k: v for k, v in body.items() if k in allowed}
-    updated = await db_update("consultations", cid, updates)
-    if not updated:
+    consultation = await db_find_one("consultations", {"id": cid})
+    if not consultation:
         raise HTTPException(404, "Consultation not found")
+    # Ownership check: owners can only update their own org's consultations
+    if user["role"] != ROLE_DEVELOPER:
+        if consultation.get("organization_id") != user["organization_id"] and consultation.get("organization_id") is not None:
+            raise HTTPException(status_code=403, detail="Not authorised to modify this consultation")
+    updated = await db_update("consultations", cid, {"status": payload.status})
     return updated
 
 
 @api_router.delete("/admin/consultations/{cid}")
-async def delete_consultation(cid: str, _=Depends(require_owner_or_developer)):
-    ok = await db_delete("consultations", cid)
-    if not ok:
+async def delete_consultation(cid: str, user=Depends(require_owner_or_developer)):
+    """Delete a consultation. Ownership enforced for non-developer roles."""
+    consultation = await db_find_one("consultations", {"id": cid})
+    if not consultation:
         raise HTTPException(404, "Consultation not found")
+    # Ownership check
+    if user["role"] != ROLE_DEVELOPER:
+        if consultation.get("organization_id") != user["organization_id"] and consultation.get("organization_id") is not None:
+            raise HTTPException(status_code=403, detail="Not authorised to delete this consultation")
+    await db_delete("consultations", cid)
     return {"ok": True}
 
 
@@ -1220,12 +1828,51 @@ async def admin_delete_review(review_id: str, _=Depends(require_developer)):
 
 
 # ─── Allowed upload MIME types and extensions ────────────────────────────────
-_ALLOWED_UPLOAD_MIMES = {
-    "image/jpeg", "image/png", "image/gif", "image/webp",
-    "image/svg+xml", "application/pdf",
+_ALLOWED_UPLOADS = {
+    ".jpg": {"image/jpeg"},
+    ".jpeg": {"image/jpeg"},
+    ".png": {"image/png"},
+    ".gif": {"image/gif"},
+    ".webp": {"image/webp"},
+    ".pdf": {"application/pdf"},
+    ".mp4": {"video/mp4", "video/quicktime"},
+    ".mov": {"video/quicktime", "video/mp4"},
+    ".webm": {"video/webm"},
 }
-_ALLOWED_UPLOAD_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".pdf"}
+_ALLOWED_UPLOAD_EXTS = set(_ALLOWED_UPLOADS)
 _MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
+_UPLOAD_FILENAME_RE = re.compile(r"^[a-f0-9-]{36}\.(jpg|jpeg|png|gif|webp|pdf|mp4|mov|webm)$")
+
+
+def _detect_upload_mime(data: bytes) -> Optional[str]:
+    if data.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if data.startswith((b"GIF87a", b"GIF89a")):
+        return "image/gif"
+    if len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    if data.startswith(b"%PDF-"):
+        return "application/pdf"
+    if len(data) >= 12 and data[4:8] == b"ftyp":
+        brands = data[8:32]
+        return "video/quicktime" if b"qt  " in brands else "video/mp4"
+    if data.startswith(b"\x1a\x45\xdf\xa3"):
+        return "video/webm"
+    return None
+
+
+def _scan_upload_bytes(data: bytes, mime_type: str) -> None:
+    lower_head = data[:8192].lower()
+    if b"eicar-standard-antivirus-test-file" in data.lower():
+        raise HTTPException(status_code=400, detail="Upload failed security scan.")
+    if any(marker in lower_head for marker in (b"<script", b"<html", b"javascript:", b"<?php")):
+        raise HTTPException(status_code=400, detail="Upload contains active content.")
+    if mime_type == "application/pdf":
+        lower_pdf = data[:2_000_000].lower()
+        if any(marker in lower_pdf for marker in (b"/javascript", b"/js", b"/openaction", b"/aa")):
+            raise HTTPException(status_code=400, detail="PDF contains active content.")
 
 
 # ----------------------------- Admin CMS: Experience (owner or developer) -----------------------------
@@ -1237,17 +1884,27 @@ class ExperienceIn(BaseModel):
 
 
 @api_router.post("/admin/experience")
-async def admin_create_experience(payload: ExperienceIn, _=Depends(require_owner_or_developer)):
+async def admin_create_experience(payload: ExperienceIn, user=Depends(require_owner_or_developer)):
     doc = payload.model_dump(exclude_none=True)
     if not doc.get("id"):
         doc["id"] = str(uuid.uuid4())
     doc["createdAt"] = now_iso()
+    # Stamp the creating user's org so we can enforce ownership on delete
+    doc["organization_id"] = user.get("organization_id") or DEFAULT_ORG_ID
     await db_insert("experience", doc)
     return doc
 
 
 @api_router.delete("/admin/experience/{experience_id}")
-async def admin_delete_experience(experience_id: str, _=Depends(require_owner_or_developer)):
+async def admin_delete_experience(experience_id: str, user=Depends(require_owner_or_developer)):
+    item = await db_find_one("experience", {"id": experience_id})
+    if not item:
+        raise HTTPException(status_code=404, detail="Experience item not found")
+    # Developers may delete any item; owners may only delete items from their org
+    if user["role"] != ROLE_DEVELOPER:
+        item_org = item.get("organization_id")
+        if item_org and item_org != user["organization_id"]:
+            raise HTTPException(status_code=403, detail="Not authorised to delete this item")
     await db_delete("experience", experience_id)
     return {"detail": "Deleted"}
 
@@ -1584,40 +2241,50 @@ async def update_team_settings(payload: TeamSettingsIn, _=Depends(require_develo
 
 @api_router.post("/upload")
 async def upload_file(file: UploadFile = File(...), _=Depends(require_owner_or_developer)):
-    import shutil
-
-    # ── Validate content type ──────────────────────────────────────────────
+    # ── Validate declared content type ─────────────────────────────────────
     content_type = (file.content_type or "").split(";")[0].strip().lower()
-    if content_type not in _ALLOWED_UPLOAD_MIMES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"File type '{content_type}' is not allowed. Permitted types: images (jpg/png/gif/webp/svg) and PDF.",
-        )
+    declared_type = content_type or "application/octet-stream"
 
     # ── Validate file extension ────────────────────────────────────────────
-    original_name = file.filename or "upload"
-    ext = os.path.splitext(original_name)[1].lower()
+    original_name = Path(file.filename or "upload").name
+    ext = Path(original_name).suffix.lower()
     if ext not in _ALLOWED_UPLOAD_EXTS:
         raise HTTPException(
             status_code=400,
             detail=f"File extension '{ext}' is not allowed.",
         )
 
+    if declared_type != "application/octet-stream" and declared_type not in _ALLOWED_UPLOADS[ext]:
+        raise HTTPException(
+            status_code=400,
+            detail="Declared file type does not match the file extension.",
+        )
+
     # ── Read & size-check ──────────────────────────────────────────────────
     data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
     if len(data) > _MAX_UPLOAD_BYTES:
         raise HTTPException(
             status_code=413,
             detail=f"File exceeds the maximum allowed size of {_MAX_UPLOAD_BYTES // (1024 * 1024)} MB.",
         )
 
-    # ── Save with a random prefix to prevent collisions ───────────────────
+    detected_type = _detect_upload_mime(data)
+    if not detected_type or detected_type not in _ALLOWED_UPLOADS[ext]:
+        raise HTTPException(status_code=400, detail="File contents do not match an allowed file type.")
+
+    _scan_upload_bytes(data, detected_type)
+
+    # ── Save with a random name to prevent collisions/path traversal ───────
     safe_name = f"{uuid.uuid4()}{ext}"
-    file_path = os.path.join(_uploads_dir, safe_name)
-    with open(file_path, "wb") as buffer:
+    file_path = (UPLOADS_DIR / safe_name).resolve()
+    if file_path.parent != UPLOADS_DIR:
+        raise HTTPException(status_code=400, detail="Invalid upload path.")
+    with file_path.open("wb") as buffer:
         buffer.write(data)
 
-    return {"url": f"/uploads/{safe_name}"}
+    return {"url": f"/uploads/{safe_name}", "content_type": detected_type, "size": len(data)}
 
 
 app.include_router(api_router)
@@ -1631,7 +2298,21 @@ _static_dir = os.path.join(frontend_path, "static")
 if os.path.isdir(_static_dir):
     app.mount("/static", StaticFiles(directory=_static_dir), name="static")
 
-app.mount("/uploads", StaticFiles(directory=_uploads_dir), name="uploads")
+
+@app.get("/uploads/{filename}")
+async def serve_upload(filename: str):
+    if not _UPLOAD_FILENAME_RE.fullmatch(filename):
+        raise HTTPException(status_code=404, detail="Not Found")
+    file_path = (UPLOADS_DIR / filename).resolve()
+    if file_path.parent != UPLOADS_DIR or not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Not Found")
+    return FileResponse(
+        file_path,
+        headers={
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "public, max-age=31536000, immutable",
+        },
+    )
 
 
 # Catch-all: ALWAYS registered so React Router paths (/projects, /about, …)

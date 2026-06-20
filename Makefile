@@ -85,7 +85,7 @@ dev: check-env install build
 backend: check-env install-backend
 	@echo "▶  Starting backend (frontend not rebuilt)..."
 	@echo "  🌐  http://localhost:8000"
-	@cd $(BACKEND_DIR) && $(UVICORN) server:app --host 0.0.0.0 --port 8000 --reload
+	@cd $(BACKEND_DIR) && $(UVICORN) server:app --host 0.0.0.0 --port 8000 --reload --reload-exclude 'db_store.json' --reload-exclude 'db_store.json.bak' --reload-exclude 'uploads/*'
 
 # ── Cleanup ──────────────────────────────────────────────────
 clean:

@@ -8,7 +8,7 @@ BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "http://localhost:8000").rstr
 API = f"{BASE_URL}/api"
 
 DEVELOPER_EMAIL = os.environ.get("DEVELOPER_EMAIL", "developer@triad.ae")
-DEVELOPER_PASSWORD = os.environ.get("DEVELOPER_PASSWORD", "developer")
+DEVELOPER_PASSWORD = os.environ.get("DEVELOPER_PASSWORD", "Dev@Triad2024!")
 
 
 @pytest.fixture(scope="module")
@@ -233,6 +233,83 @@ def test_auth_me(s, token):
     assert r.json()["role"] == "developer"
 
 
+def test_refresh_token_rotation(s):
+    r = s.post(
+        f"{API}/auth/login",
+        json={"email": DEVELOPER_EMAIL, "password": DEVELOPER_PASSWORD},
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert "refresh_token" in data
+    rf_token = data["refresh_token"]
+
+    # Call /auth/refresh
+    r_refresh = s.post(f"{API}/auth/refresh", json={"refresh_token": rf_token})
+    assert r_refresh.status_code == 200
+    r_data = r_refresh.json()
+    assert "access_token" in r_data
+    assert "refresh_token" in r_data
+    assert r_data["refresh_token"] != rf_token
+
+
+def test_refresh_token_reuse_revocation(s):
+    r = s.post(
+        f"{API}/auth/login",
+        json={"email": DEVELOPER_EMAIL, "password": DEVELOPER_PASSWORD},
+    )
+    assert r.status_code == 200
+    rf_token1 = r.json()["refresh_token"]
+
+    # First refresh succeeds
+    r1 = s.post(f"{API}/auth/refresh", json={"refresh_token": rf_token1})
+    assert r1.status_code == 200
+    rf_token2 = r1.json()["refresh_token"]
+
+    # Reuse of rf_token1 fails
+    r2 = s.post(f"{API}/auth/refresh", json={"refresh_token": rf_token1})
+    assert r2.status_code == 401
+    assert "Token reuse detected" in r2.json()["detail"]
+
+    # Future refreshes with rf_token2 must also fail as a result of reuse detection revoking all active user tokens
+    r3 = s.post(f"{API}/auth/refresh", json={"refresh_token": rf_token2})
+    assert r3.status_code == 401
+
+
+def test_none_algorithm_rejected(s):
+    import jwt
+    from datetime import datetime, timezone, timedelta
+    payload = {
+        "sub": "developer-id",
+        "role": "developer",
+        "exp": (datetime.now(timezone.utc) + timedelta(minutes=15)).timestamp(),
+        "iat": datetime.now(timezone.utc).timestamp(),
+    }
+    token = jwt.encode(payload, key="", algorithm="none")
+    r = s.get(f"{API}/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 401
+
+
+def test_weak_secret_rejected():
+    import os
+    import importlib
+    # Ensure sys.path contains backend folder to import security
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    import security
+    old_secret = os.environ.get("JWT_SECRET")
+    os.environ["JWT_SECRET"] = "too-short"
+    try:
+        importlib.reload(security)
+        assert False, "Should have raised ValueError for weak secret"
+    except ValueError as e:
+        assert "JWT_SECRET must be at least 32 characters" in str(e)
+    finally:
+        if old_secret:
+            os.environ["JWT_SECRET"] = old_secret
+        else:
+            del os.environ["JWT_SECRET"]
+        importlib.reload(security)
+
+
 if __name__ == "__main__":
     print(f"\n🚀 Triad Realty API Tests")
     print(f"   Target: {API}")
@@ -266,6 +343,10 @@ if __name__ == "__main__":
         ("Experience CRUD (developer)", lambda: test_experience_crud(s, token)),
         ("Team create requires auth", lambda: test_team_create_requires_auth(s)),
         ("Auth /me", lambda: test_auth_me(s, token)),
+        ("JWT: Refresh Token Rotation", lambda: test_refresh_token_rotation(s)),
+        ("JWT: Reuse Detection & Revocation", lambda: test_refresh_token_reuse_revocation(s)),
+        ("JWT: None Algorithm Rejection", lambda: test_none_algorithm_rejected(s)),
+        ("JWT: Weak Secret Rejection", test_weak_secret_rejected),
     ]
 
     passed = sum(run_test(name, fn) for name, fn in tests)

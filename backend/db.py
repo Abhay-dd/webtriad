@@ -19,6 +19,7 @@ client = None
 if MONGO_URL:
     try:
         from motor.motor_asyncio import AsyncIOMotorClient
+        from pymongo import ReturnDocument
 
         client = AsyncIOMotorClient(MONGO_URL)
         db = client[DB_NAME]
@@ -44,9 +45,40 @@ _store: dict[str, list] = {
     "reviews": [],
     "experience": [],
     "consultations": [],
+    "refresh_tokens": [],
 }
 
 STORE_FILE = ROOT_DIR / "db_store.json"
+_ALLOWED_COLLECTIONS = set(_store.keys())
+
+
+def _validate_collection(collection: str) -> None:
+    if collection not in _ALLOWED_COLLECTIONS:
+        raise ValueError(f"Unknown database collection: {collection}")
+
+
+def _validate_plain_keys(document: dict[str, Any], label: str) -> None:
+    for key in document:
+        if not isinstance(key, str) or key.startswith("$") or "." in key:
+            raise ValueError(f"Unsafe {label} key: {key}")
+
+
+def _validate_query(query: Optional[dict[str, Any]]) -> dict[str, Any]:
+    if not query:
+        return {}
+    if not isinstance(query, dict):
+        raise ValueError("Database query must be a mapping")
+    _validate_plain_keys(query, "query")
+    for value in query.values():
+        if isinstance(value, dict):
+            _validate_plain_keys(value, "query value")
+    return query
+
+
+def _validate_updates(updates: dict[str, Any]) -> None:
+    if not isinstance(updates, dict):
+        raise ValueError("Database updates must be a mapping")
+    _validate_plain_keys(updates, "update")
 
 
 def _load_store():
@@ -76,11 +108,14 @@ _load_store()
 
 
 async def mem_insert(collection: str, doc: dict):
+    _validate_collection(collection)
     _store[collection].append(doc)
     _save_store()
 
 
 async def mem_find(collection: str, query: Optional[dict] = None):
+    _validate_collection(collection)
+    query = _validate_query(query)
     items = list(_store[collection])
     if not query:
         return items
@@ -95,6 +130,8 @@ def _matches(doc: dict, query: dict) -> bool:
 
 
 async def mem_find_one(collection: str, query: dict):
+    _validate_collection(collection)
+    query = _validate_query(query)
     for doc in _store[collection]:
         if _matches(doc, query):
             return doc
@@ -102,6 +139,8 @@ async def mem_find_one(collection: str, query: dict):
 
 
 async def mem_update(collection: str, doc_id: str, updates: dict):
+    _validate_collection(collection)
+    _validate_updates(updates)
     for i, doc in enumerate(_store[collection]):
         if doc.get("id") == doc_id or doc.get("_id") == doc_id:
             _store[collection][i].update(updates)
@@ -110,7 +149,20 @@ async def mem_update(collection: str, doc_id: str, updates: dict):
     return None
 
 
+async def mem_update_one(collection: str, query: dict, updates: dict):
+    _validate_collection(collection)
+    query = _validate_query(query)
+    _validate_updates(updates)
+    for i, doc in enumerate(_store[collection]):
+        if _matches(doc, query):
+            _store[collection][i].update(updates)
+            _save_store()
+            return _store[collection][i]
+    return None
+
+
 async def mem_delete(collection: str, doc_id: str) -> bool:
+    _validate_collection(collection)
     initial_len = len(_store[collection])
     _store[collection] = [
         doc
@@ -124,6 +176,8 @@ async def mem_delete(collection: str, doc_id: str) -> bool:
 
 
 async def mem_delete_many(collection: str, query: dict):
+    _validate_collection(collection)
+    query = _validate_query(query)
     _store[collection] = [
         doc
         for doc in _store[collection]
@@ -133,6 +187,7 @@ async def mem_delete_many(collection: str, query: dict):
 
 
 async def db_insert(collection: str, doc: dict):
+    _validate_collection(collection)
     if USE_MONGO:
         await db[collection].insert_one({**doc})
     else:
@@ -140,26 +195,47 @@ async def db_insert(collection: str, doc: dict):
 
 
 async def db_find(collection: str, query: Optional[dict] = None):
+    _validate_collection(collection)
+    q = _validate_query(query)
     if USE_MONGO:
-        q = query or {}
         return await db[collection].find(q, {"_id": 0}).to_list(500)
-    return await mem_find(collection, query)
+    return await mem_find(collection, q)
 
 
 async def db_find_one(collection: str, query: dict):
+    _validate_collection(collection)
+    query = _validate_query(query)
     if USE_MONGO:
         return await db[collection].find_one(query, {"_id": 0})
     return await mem_find_one(collection, query)
 
 
 async def db_update(collection: str, doc_id: str, updates: dict):
+    _validate_collection(collection)
+    _validate_updates(updates)
     if USE_MONGO:
         await db[collection].update_one({"id": doc_id}, {"$set": updates})
         return await db[collection].find_one({"id": doc_id}, {"_id": 0})
     return await mem_update(collection, doc_id, updates)
 
 
+async def db_update_one(collection: str, query: dict, updates: dict):
+    _validate_collection(collection)
+    query = _validate_query(query)
+    _validate_updates(updates)
+    if USE_MONGO:
+        res = await db[collection].find_one_and_update(
+            query,
+            {"$set": updates},
+            projection={"_id": 0},
+            return_document=ReturnDocument.AFTER,
+        )
+        return res
+    return await mem_update_one(collection, query, updates)
+
+
 async def db_delete(collection: str, doc_id: str) -> bool:
+    _validate_collection(collection)
     if USE_MONGO:
         res = await db[collection].delete_one({"id": doc_id})
         return res.deleted_count > 0
@@ -168,6 +244,8 @@ async def db_delete(collection: str, doc_id: str) -> bool:
 
 
 async def db_delete_many(collection: str, query: dict):
+    _validate_collection(collection)
+    query = _validate_query(query)
     if USE_MONGO:
         await db[collection].delete_many(query)
     else:

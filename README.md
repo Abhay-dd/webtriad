@@ -105,3 +105,13 @@ See [`backend/.env.example`](backend/.env.example) for the full reference. Key v
 | `MONGO_URL` | MongoDB connection string (leave blank to use local JSON store) |
 | `REELLY_API_KEY` | External property listings API key (optional) |
 | `ENVIRONMENT` | `development` or `production` (enables JWT secret enforcement) |
+| `CORS_ORIGINS` | Explicit comma-separated frontend origins. Do not use `*` in production. |
+| `ALLOWED_HOSTS` | Explicit comma-separated hostnames accepted by the API. |
+| `FORCE_HTTPS` | Set `true` in production to redirect HTTP to HTTPS. |
+| `LOG_FORMAT` | Use `json` in production for structured auth/API/security logs. |
+
+Production notes:
+- Store all secrets in the hosting provider secret manager or environment settings, not in source control.
+- Use an HTTPS-only public endpoint and set `FORCE_HTTPS=true`.
+- Restrict MongoDB with private networking or a strict provider IP allowlist; do not expose the database to the public internet.
+- Keep `CORS_ORIGINS` and `ALLOWED_HOSTS` pinned to real deployment domains.
