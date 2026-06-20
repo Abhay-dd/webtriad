@@ -1857,7 +1857,7 @@ _ALLOWED_UPLOADS = {
 }
 _ALLOWED_UPLOAD_EXTS = set(_ALLOWED_UPLOADS)
 _MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
-_UPLOAD_FILENAME_RE = re.compile(r"^[a-f0-9-]{36}\.(jpg|jpeg|png|gif|webp|pdf|mp4|mov|webm)$")
+_UPLOAD_FILENAME_RE = re.compile(r"^[a-f0-9-]{36}[a-zA-Z0-9_\-\s().]*\.(jpg|jpeg|png|gif|webp|pdf|mp4|mov|webm)$")
 
 
 def _detect_upload_mime(data: bytes) -> Optional[str]:
