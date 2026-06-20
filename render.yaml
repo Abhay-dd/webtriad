@@ -56,9 +56,9 @@ services:
 
       # ── CORS — update with your actual Render URL after first deploy ──────────
       - key: CORS_ORIGINS
-        value: https://triad-realty.onrender.com
+        value: https://webtriad-8.onrender.com
       - key: ALLOWED_HOSTS
-        value: triad-realty.onrender.com
+        value: webtriad-8.onrender.com
 
       # ── Optional: external Reelly listings API ────────────────────────────────
       - key: REELLY_API_KEY
