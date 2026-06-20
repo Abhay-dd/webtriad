@@ -53,6 +53,11 @@ ENV DB_NAME=triad_realty
 ENV ALLOWED_HOSTS=webtriad-8.onrender.com,*.onrender.com,localhost
 ENV CORS_ORIGINS=https://webtriad-8.onrender.com
 
+# Cloudinary — persistent image storage
+ENV CLOUDINARY_CLOUD_NAME=dhxttgpfj
+ENV CLOUDINARY_API_KEY=586595859119989
+ENV CLOUDINARY_API_SECRET=ZOv0THiwXmBw4KvhYoFdP3CeuEE
+
 # Optional
 ENV REELLY_API_BASE=https://search-listings-production.up.railway.app/v1
 ENV REELLY_API_KEY=

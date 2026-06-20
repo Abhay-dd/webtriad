@@ -9,9 +9,12 @@ import uuid
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Optional
+import io
 
 import hashlib
 import httpx
+import cloudinary
+import cloudinary.uploader
 from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response, status, UploadFile, File
 from fastapi.exceptions import RequestValidationError
@@ -62,6 +65,19 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 UPLOADS_DIR = Path(os.environ.get("UPLOADS_DIR", str(ROOT_DIR.parent / "uploaded_media"))).resolve()
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+
+# ── Cloudinary configuration (used for persistent image storage on Render) ──
+_CLOUDINARY_CLOUD_NAME = os.environ.get("CLOUDINARY_CLOUD_NAME", "")
+_CLOUDINARY_API_KEY = os.environ.get("CLOUDINARY_API_KEY", "")
+_CLOUDINARY_API_SECRET = os.environ.get("CLOUDINARY_API_SECRET", "")
+_USE_CLOUDINARY = bool(_CLOUDINARY_CLOUD_NAME and _CLOUDINARY_API_KEY and _CLOUDINARY_API_SECRET)
+if _USE_CLOUDINARY:
+    cloudinary.config(
+        cloud_name=_CLOUDINARY_CLOUD_NAME,
+        api_key=_CLOUDINARY_API_KEY,
+        api_secret=_CLOUDINARY_API_SECRET,
+        secure=True,
+    )
 
 DEFAULT_ORG_ID = os.environ.get("DEFAULT_ORG_ID", "default-org")
 
@@ -2276,15 +2292,32 @@ async def upload_file(file: UploadFile = File(...), _=Depends(require_owner_or_d
 
     _scan_upload_bytes(data, detected_type)
 
-    # ── Save with a random name to prevent collisions/path traversal ───────
+    # ── Upload to Cloudinary (persistent) or local disk (dev fallback) ────────
     safe_name = f"{uuid.uuid4()}{ext}"
-    file_path = (UPLOADS_DIR / safe_name).resolve()
-    if file_path.parent != UPLOADS_DIR:
-        raise HTTPException(status_code=400, detail="Invalid upload path.")
-    with file_path.open("wb") as buffer:
-        buffer.write(data)
 
-    return {"url": f"/uploads/{safe_name}", "content_type": detected_type, "size": len(data)}
+    if _USE_CLOUDINARY:
+        # Upload to Cloudinary — survives container restarts/redeploys
+        try:
+            result = cloudinary.uploader.upload(
+                io.BytesIO(data),
+                public_id=safe_name.rsplit(".", 1)[0],  # filename without ext
+                resource_type="auto",
+                folder="triad-realty",
+            )
+            url = result.get("secure_url", "")
+        except Exception as exc:
+            logger.exception("cloudinary.upload_failed", extra={"error": str(exc)})
+            raise HTTPException(status_code=500, detail="Image upload failed. Please try again.")
+    else:
+        # Fallback: local disk (development only — not persistent on Render)
+        file_path = (UPLOADS_DIR / safe_name).resolve()
+        if file_path.parent != UPLOADS_DIR:
+            raise HTTPException(status_code=400, detail="Invalid upload path.")
+        with file_path.open("wb") as buffer:
+            buffer.write(data)
+        url = f"/uploads/{safe_name}"
+
+    return {"url": url, "content_type": detected_type, "size": len(data)}
 
 
 app.include_router(api_router)
