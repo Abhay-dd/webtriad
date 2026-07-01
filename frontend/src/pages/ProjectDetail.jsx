@@ -25,11 +25,13 @@ function toProjectViewModel(item) {
     // null = not provided — no fallback
     gallery:      rawGallery ? rawGallery.map((url) => resolveMediaUrl(url)) : null,
     floor_plan:   item.floor_plan   ? resolveMediaUrl(item.floor_plan)   : null,
+    floor_plans:  Array.isArray(item.floor_plans) ? item.floor_plans.map(fp => ({ ...fp, file: resolveMediaUrl(fp.file) })) : null,
     amenities:    Array.isArray(item.amenities) && item.amenities.length  ? item.amenities   : null,
     map_image:    item.map_image    ? resolveMediaUrl(item.map_image)     : null,
     payment_plan: Array.isArray(item.payment_plan) && item.payment_plan.length ? item.payment_plan : null,
     type:         item.type || "",
     transactions: Array.isArray(item.transactions) && item.transactions.length ? item.transactions : null,
+    brochure_url: item.brochure_url ? resolveMediaUrl(item.brochure_url) : null,
   };
 }
 
@@ -69,7 +71,7 @@ export default function ProjectDetail() {
     if (!p || p.error) return ["Details"];
     const sections = ["Details"];
     if (p.gallery  && p.gallery.length   > 0) sections.push("Gallery");
-    if (p.floor_plan)                          sections.push("Floor Plan");
+    if (p.floor_plan || (p.floor_plans && p.floor_plans.length > 0)) sections.push("Floor Plan");
     if (p.amenities && p.amenities.length > 0) sections.push("Amenities");
     if (p.location || p.map_image)             sections.push("Location");
     if (p.payment_plan && p.payment_plan.length > 0) sections.push("Payment Plan");
@@ -119,9 +121,15 @@ export default function ProjectDetail() {
             <h1 className="font-display text-white text-5xl md:text-7xl mt-4 leading-[0.95]">{p.name}</h1>
             {p.tagline && <p className="text-white/85 mt-4 max-w-xl">{p.tagline}</p>}
             <div className="flex gap-4 mt-8 flex-wrap">
-              <Link to={`/contact?project=${p.id}&asset=brochure`} className="btn-ghost-light" data-testid="pdetail-cta-brochure">
-                <Download size={14} />Download Brochure
-              </Link>
+              {p.brochure_url ? (
+                <a href={p.brochure_url} target="_blank" rel="noopener noreferrer" className="btn-ghost-light" data-testid="pdetail-cta-brochure">
+                  <Download size={14} />Download Brochure
+                </a>
+              ) : (
+                <Link to={`/contact?project=${p.id}&asset=brochure`} className="btn-ghost-light" data-testid="pdetail-cta-brochure">
+                  <Download size={14} />Download Brochure
+                </Link>
+              )}
               <Link to={`/contact?project=${p.id}&asset=factsheet`} className="text-white text-xs uppercase tracking-[0.22em] border-b border-[var(--gold)] pb-2">
                 Factsheet
               </Link>
@@ -199,9 +207,15 @@ export default function ProjectDetail() {
                     <Mail size={14} className="text-[var(--gold-deep)]" />hello@triadrealty.ae
                   </a>
                 </div>
-                <Link to={`/contact?project=${p.id}&asset=brochure`} className="btn-gold w-full justify-center mt-6">
-                  Request Brochure
-                </Link>
+                {p.brochure_url ? (
+                  <a href={p.brochure_url} target="_blank" rel="noopener noreferrer" className="btn-gold w-full justify-center mt-6">
+                    Download Brochure
+                  </a>
+                ) : (
+                  <Link to={`/contact?project=${p.id}&asset=brochure`} className="btn-gold w-full justify-center mt-6">
+                    Request Brochure
+                  </Link>
+                )}
               </aside>
             </div>
           )}
@@ -221,18 +235,49 @@ export default function ProjectDetail() {
             </div>
           )}
 
-          {/* Floor Plan — only rendered when real floor_plan exists */}
-          {tab === "Floor Plan" && p.floor_plan && (
+          {/* Floor Plan — rendered when real floor_plan or floor_plans list exists */}
+          {tab === "Floor Plan" && (p.floor_plan || (p.floor_plans && p.floor_plans.length > 0)) && (
             <div>
               <div className="overline text-[var(--gold-deep)]">Floor Plans</div>
               <h2 className="font-display text-4xl mt-3">Spatial blueprints.</h2>
-              <div className="mt-10 border border-[var(--line)] p-6 bg-[var(--bg-alt)]">
-                <img src={p.floor_plan} alt="floor plan" className="w-full" />
-                <div className="mt-6 flex justify-between items-center">
-                  <div className="text-sm text-[var(--muted)]">Detailed plans by configuration available on request.</div>
-                  <Link to={`/contact?project=${p.id}&asset=floor-plan`} className="btn-gold">Request Full Plans</Link>
+              
+              {p.floor_plan && (
+                <div className="mt-10 border border-[var(--line)] p-6 bg-[var(--bg-alt)] max-w-3xl">
+                  {p.floor_plan.toLowerCase().endsWith(".pdf") ? (
+                    <div className="py-12 text-center">
+                      <p className="text-lg font-medium text-[var(--ink)]">Floor Plan Document (PDF)</p>
+                      <a href={p.floor_plan} target="_blank" rel="noopener noreferrer" className="btn-gold mt-4 inline-flex items-center gap-2">
+                        <Download size={14} /> View PDF Blueprint
+                      </a>
+                    </div>
+                  ) : (
+                    <img src={p.floor_plan} alt="floor plan" className="w-full max-h-[600px] object-contain mx-auto" />
+                  )}
+                  <div className="mt-6 flex justify-between items-center flex-wrap gap-4">
+                    <div className="text-sm text-[var(--muted)]">Detailed plans by configuration available on request.</div>
+                    <Link to={`/contact?project=${p.id}&asset=floor-plan`} className="btn-gold">Request Full Plans</Link>
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {p.floor_plans && p.floor_plans.length > 0 && (
+                <div className="mt-10 max-w-3xl space-y-6">
+                  <h3 className="font-display text-2xl text-[var(--ink)]">Downloadable Floor Plans</h3>
+                  <div className="grid grid-cols-1 gap-4">
+                    {p.floor_plans.map((fp) => (
+                      <div key={fp.id} className="border border-[var(--line)] p-5 bg-[var(--bg-alt)] flex justify-between items-center gap-4 flex-wrap">
+                        <div>
+                          <div className="font-semibold text-base text-[var(--ink)]">{fp.name}</div>
+                          {fp.description && <div className="text-xs text-[var(--muted)] mt-1">{fp.description}</div>}
+                        </div>
+                        <a href={fp.file} target="_blank" rel="noopener noreferrer" className="btn-ghost text-xs flex items-center gap-1">
+                          <Download size={12} /> Download PDF
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

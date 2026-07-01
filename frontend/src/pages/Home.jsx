@@ -73,23 +73,6 @@ export default function Home() {
     };
   }, []);
 
-  const renderFoundersPhotoSection = () => (
-    <section className="bg-[var(--bg-alt)]" data-testid="home-founders-photo" key="founders-photo">
-      <div className="container-x">
-        <div className="w-full aspect-[21/9] bg-[var(--ink)] overflow-hidden relative">
-          <img 
-            src={resolveMediaUrl(homepageSettings.founders_image_url || DEFAULT_HOMEPAGE_SETTINGS.founders_image_url)} 
-            alt="Founders of Triad Realty" 
-            className="w-full h-full object-cover opacity-80"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-[var(--ink)]/80 to-transparent flex items-end p-8 md:p-12">
-            <h2 className="font-display text-4xl md:text-5xl text-white">Three founders. One conviction.</h2>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-
   const renderTeamSection = () => (
     <section className="section-pad bg-[var(--ink)] text-white relative" data-testid="home-team" key="home-team">
       <div className="grain absolute inset-0" />
@@ -101,13 +84,16 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Team Group Photo Banner */}
-        <div className="w-full aspect-[21/9] bg-white/5 overflow-hidden relative shadow-lg mb-12 img-zoom border border-white/10">
+        {/* Founders Group Photo — full colour with text overlay */}
+        <div className="w-full aspect-[21/9] overflow-hidden relative shadow-lg mb-12 img-zoom border border-white/10">
           <img 
             src="/group_photo.jpg" 
-            alt="Triad Realty Team Group" 
-            className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700 opacity-90 group-hover:opacity-100" 
+            alt="Three Founders of Triad Realty" 
+            className="w-full h-full object-cover transition-all duration-700"
           />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent flex items-end p-8 md:p-12">
+            <h2 className="font-display text-4xl md:text-5xl text-white">Three founders. One conviction.</h2>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
@@ -341,15 +327,14 @@ export default function Home() {
         </div>
       </section>
 
+
       {homepageSettings.team_comes_first ? (
         <>
           {renderTeamSection()}
           <PartnerDevelopers />
-          {renderFoundersPhotoSection()}
         </>
       ) : (
         <>
-          {renderFoundersPhotoSection()}
           <PartnerDevelopers />
           {renderTeamSection()}
         </>

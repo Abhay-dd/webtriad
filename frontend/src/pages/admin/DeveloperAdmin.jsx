@@ -1,8 +1,22 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../../context/AuthContext";
 import apiClient from "../../services/api/client";
-import { Plus, Trash, LogOut, Edit, X, RefreshCw, Activity, CheckCircle, XCircle, Database, Clock, Users } from "lucide-react";
+import { Plus, Trash, LogOut, Edit, X, RefreshCw, Activity, CheckCircle, XCircle, Database, Clock, Users, GripVertical, CheckCheck } from "lucide-react";
 import { resolveMediaUrl } from "../../config";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  arrayMove,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 const TIER_LABELS = {
   "co-founder": "Founders",
@@ -60,6 +74,86 @@ function FileUploadButton({ onUploadSuccess, label = "Upload File" }) {
 }
 
 const TABS = ["team", "owners", "projects", "blogs", "home", "popup", "reviews", "status"];
+
+// ── Sortable row component for drag-and-drop team reordering ──────────────────
+function SortableTeamRow({ member, onEdit, onDelete }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: member.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 10 : "auto",
+  };
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={style}
+      className={`flex items-center gap-3 border border-[var(--line)] bg-white px-3 py-2.5 rounded group select-none ${
+        isDragging ? "shadow-lg ring-1 ring-[var(--gold)]" : "hover:bg-[var(--bg-alt)]"
+      }`}
+    >
+      {/* Drag handle */}
+      <button
+        type="button"
+        {...attributes}
+        {...listeners}
+        className="text-[var(--line)] hover:text-[var(--muted)] cursor-grab active:cursor-grabbing transition-colors flex-shrink-0 touch-none"
+        aria-label="Drag to reorder"
+      >
+        <GripVertical size={16} />
+      </button>
+
+      {/* Photo thumbnail */}
+      {member.photo ? (
+        <img
+          src={resolveMediaUrl(member.photo)}
+          alt={member.name}
+          className="w-8 h-8 rounded-full object-cover object-top flex-shrink-0 border border-[var(--line)]"
+        />
+      ) : (
+        <div className="w-8 h-8 rounded-full bg-[var(--ink)] flex items-center justify-center flex-shrink-0 text-[var(--gold)] text-xs font-semibold">
+          {member.name?.split(" ").map((p) => p[0]).join("").slice(0, 2)}
+        </div>
+      )}
+
+      {/* Name & role */}
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-[var(--ink)] truncate">{member.name}</p>
+        <p className="text-xs text-[var(--muted)] truncate">{member.role}</p>
+      </div>
+
+      {/* Actions */}
+      <div className="flex gap-1 flex-shrink-0">
+        <button
+          type="button"
+          onClick={() => onEdit(member)}
+          className="p-1.5 hover:bg-white rounded text-[var(--ink)] transition-colors"
+          title="Edit"
+        >
+          <Edit size={13} />
+        </button>
+        <button
+          type="button"
+          onClick={() => onDelete(member.id)}
+          className="p-1.5 text-red-400 hover:bg-red-50 rounded transition-colors"
+          title="Delete"
+        >
+          <Trash size={13} />
+        </button>
+      </div>
+    </li>
+  );
+}
+
 
 const TAB_LABELS = {
   team: "Team",
@@ -161,6 +255,7 @@ export default function DeveloperAdmin() {
     rating: 5,
     avatar: "",
   });
+  const [editingReviewId, setEditingReviewId] = useState(null);
   const [teamModal, setTeamModal] = useState(false);
   const [editingTeamId, setEditingTeamId] = useState(null);
   const [teamForm, setTeamForm] = useState({
@@ -205,6 +300,12 @@ export default function DeveloperAdmin() {
   });
   const [popupSaved, setPopupSaved] = useState(false);
   const [homepageForm, setHomepageForm] = useState(DEFAULT_HOMEPAGE_FORM);
+  const [reviewsSettingsForm, setReviewsSettingsForm] = useState({
+    hero_title: "",
+    hero_description: "",
+    testimonials_title: "",
+    average_rating: 4.9,
+  });
   const [actionError, setActionError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -222,7 +323,7 @@ export default function DeveloperAdmin() {
   const load = async () => {
     setLoading(true);
     try {
-      const [t, o, p, b, h, pop, home, r, cons] = await Promise.all([
+      const [t, o, p, b, h, pop, home, r, cons, revSet] = await Promise.all([
         apiClient.get("/team"),
         apiClient.get("/admin/owners"),
         apiClient.get("/admin/projects"),
@@ -232,6 +333,7 @@ export default function DeveloperAdmin() {
         apiClient.get("/settings/homepage"),
         apiClient.get("/reviews"),
         apiClient.get("/admin/consultations").catch(() => ({ data: { results: [] } })),
+        apiClient.get("/settings/reviews").catch(() => ({ data: null })),
       ]);
       setTeam(t.data.results || []);
       setOwners(o.data.results || []);
@@ -276,6 +378,14 @@ export default function DeveloperAdmin() {
           company_whatsapp: home.data.company_whatsapp || "",
           company_instagram: home.data.company_instagram || "",
           company_linkedin: home.data.company_linkedin || "",
+        });
+      }
+      if (revSet && revSet.data) {
+        setReviewsSettingsForm({
+          hero_title: revSet.data.hero_title || "",
+          hero_description: revSet.data.hero_description || "",
+          testimonials_title: revSet.data.testimonials_title || "",
+          average_rating: revSet.data.average_rating ?? 4.9,
         });
       }
     } catch {
@@ -330,12 +440,16 @@ export default function DeveloperAdmin() {
     }
   };
 
-  const createReview = async (e) => {
+  const saveReview = async (e) => {
     e.preventDefault();
     setActionError("");
     setSaving(true);
     try {
-      await apiClient.post("/admin/reviews", reviewForm);
+      if (editingReviewId) {
+        await apiClient.patch(`/admin/reviews/${editingReviewId}`, reviewForm);
+      } else {
+        await apiClient.post("/admin/reviews", reviewForm);
+      }
       setReviewForm({
         youtubeCode: "",
         description: "",
@@ -345,11 +459,38 @@ export default function DeveloperAdmin() {
         rating: 5,
         avatar: "",
       });
+      setEditingReviewId(null);
       load();
     } catch (err) {
-      setActionError(err.response?.data?.detail || "Failed to create review");
+      setActionError(err.response?.data?.detail || "Failed to save review");
     }
     setSaving(false);
+  };
+
+  const startEditReview = (rev) => {
+    setEditingReviewId(rev.id);
+    setReviewForm({
+      youtubeCode: rev.youtubeCode || "",
+      description: rev.description || rev.text || "",
+      name: rev.name || rev.author || "",
+      role: rev.role || "",
+      country: rev.country || "",
+      rating: rev.rating || 5,
+      avatar: rev.avatar || "",
+    });
+  };
+
+  const cancelEditReview = () => {
+    setEditingReviewId(null);
+    setReviewForm({
+      youtubeCode: "",
+      description: "",
+      name: "",
+      role: "",
+      country: "",
+      rating: 5,
+      avatar: "",
+    });
   };
 
   const deleteReview = async (id) => {
@@ -435,6 +576,41 @@ export default function DeveloperAdmin() {
     }
     setSaving(false);
   };
+
+  const [sortSaved, setSortSaved] = useState(false);
+
+  const handleTeamDragEnd = async (event, tierKey) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    setTeam((prev) => {
+      const tierMembers = prev
+        .filter((m) => (m.tier || "senior-portfolio-manager") === tierKey)
+        .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+      const otherMembers = prev.filter((m) => (m.tier || "senior-portfolio-manager") !== tierKey);
+
+      const oldIndex = tierMembers.findIndex((m) => m.id === active.id);
+      const newIndex = tierMembers.findIndex((m) => m.id === over.id);
+      const reordered = arrayMove(tierMembers, oldIndex, newIndex).map((m, i) => ({
+        ...m,
+        sortOrder: i,
+      }));
+
+      // Persist new sortOrders in background
+      reordered.forEach((m) => {
+        apiClient.put(`/team/${m.id}`, { ...m }).catch(() => {});
+      });
+
+      setSortSaved(true);
+      setTimeout(() => setSortSaved(false), 2500);
+
+      return [...otherMembers, ...reordered];
+    });
+  };
+
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  );
 
   const openProjectModal = (project = null) => {
     setActionError("");
@@ -703,6 +879,28 @@ export default function DeveloperAdmin() {
     setSaving(false);
   };
 
+
+  const saveReviewsSettings = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setActionError("");
+    try {
+      const res = await apiClient.put("/admin/settings/reviews", reviewsSettingsForm);
+      if (res.data) {
+        setReviewsSettingsForm({
+          hero_title: res.data.hero_title || "",
+          hero_description: res.data.hero_description || "",
+          testimonials_title: res.data.testimonials_title || "",
+          average_rating: res.data.average_rating ?? 4.9,
+        });
+        alert("Reviews page settings updated successfully!");
+      }
+    } catch (err) {
+      setActionError(err.response?.data?.detail || "Failed to update reviews page settings");
+    }
+    setSaving(false);
+  };
+
   return (
     <div className="min-h-screen bg-[#f4f2ee] flex">
       <aside className="admin-sidebar-fixed hidden lg:flex fixed top-0 left-0 h-screen min-h-screen w-64 bg-[var(--ink)] flex-col z-50 lg:static lg:flex-shrink-0">
@@ -777,40 +975,63 @@ export default function DeveloperAdmin() {
           <>
             {tab === "team" && (
               <div className="bg-white p-8 border border-[var(--line)]">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="font-display text-2xl">Team ({team.length})</h2>
-                  <button type="button" onClick={() => openTeamModal()} className="btn-gold !px-4 !py-2 flex gap-2 items-center text-sm">
-                    <Plus size={14} /> Add Member
-                  </button>
+                <div className="flex justify-between items-center mb-2">
+                  <div>
+                    <h2 className="font-display text-2xl">Team ({team.length})</h2>
+                    <p className="text-xs text-[var(--muted)] mt-1">Drag <GripVertical size={11} className="inline-block" /> to reorder within each group.</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {sortSaved && (
+                      <span className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium animate-[fadeUp_0.4s_ease_both]">
+                        <CheckCheck size={13} /> Order saved
+                      </span>
+                    )}
+                    <button type="button" onClick={() => openTeamModal()} className="btn-gold !px-4 !py-2 flex gap-2 items-center text-sm">
+                      <Plus size={14} /> Add Member
+                    </button>
+                  </div>
                 </div>
-                {/* Group members by tier */}
-                {TIER_KEYS.map((tierKey) => {
-                  const members = team.filter((m) => (m.tier || "senior-portfolio-manager") === tierKey);
-                  return (
-                    <div key={tierKey} className="mb-8">
-                      <p className="overline text-[var(--muted)] mb-2">{TIER_LABELS[tierKey]}</p>
-                      {members.length === 0 ? (
-                        <p className="text-sm text-[var(--muted)] pl-2 italic">No members in this section</p>
-                      ) : (
-                        <ul className="space-y-1">
-                          {members.map((m) => (
-                            <li key={m.id} className="flex justify-between items-center border-b border-[var(--line)] py-2">
-                              <span className="text-sm">{m.name} — <span className="text-[var(--muted)]">{m.role}</span></span>
-                              <div className="flex gap-2">
-                                <button type="button" onClick={() => openTeamModal(m)} className="p-1 hover:bg-[var(--bg-alt)] rounded">
-                                  <Edit size={14} />
-                                </button>
-                                <button type="button" onClick={() => deleteTeam(m.id)} className="p-1 text-red-500 hover:bg-red-50 rounded">
-                                  <Trash size={14} />
-                                </button>
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  );
-                })}
+
+                <div className="mt-6 space-y-8">
+                  {TIER_KEYS.filter((k) => k !== "none").map((tierKey) => {
+                    const members = team
+                      .filter((m) => (m.tier || "senior-portfolio-manager") === tierKey)
+                      .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+                    return (
+                      <div key={tierKey}>
+                        <p className="overline text-[var(--muted)] mb-3 flex items-center gap-2">
+                          {TIER_LABELS[tierKey]}
+                          <span className="text-[10px] normal-case tracking-normal opacity-60">({members.length})</span>
+                        </p>
+                        {members.length === 0 ? (
+                          <p className="text-sm text-[var(--muted)] pl-2 italic border border-dashed border-[var(--line)] py-4 text-center rounded">No members in this tier</p>
+                        ) : (
+                          <DndContext
+                            sensors={dndSensors}
+                            collisionDetection={closestCenter}
+                            onDragEnd={(e) => handleTeamDragEnd(e, tierKey)}
+                          >
+                            <SortableContext
+                              items={members.map((m) => m.id)}
+                              strategy={verticalListSortingStrategy}
+                            >
+                              <ul className="space-y-1.5">
+                                {members.map((m) => (
+                                  <SortableTeamRow
+                                    key={m.id}
+                                    member={m}
+                                    onEdit={openTeamModal}
+                                    onDelete={deleteTeam}
+                                  />
+                                ))}
+                              </ul>
+                            </SortableContext>
+                          </DndContext>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
@@ -1254,9 +1475,12 @@ export default function DeveloperAdmin() {
 
 
             {tab === "reviews" && (
-              <div className="grid lg:grid-cols-2 gap-8">
-                <form onSubmit={createReview} className="bg-white p-8 border border-[var(--line)] space-y-4">
-                  <h2 className="font-display text-2xl font-semibold">Post Video Review</h2>
+              <>
+                <div className="grid lg:grid-cols-2 gap-8">
+                <form onSubmit={saveReview} className="bg-white p-8 border border-[var(--line)] space-y-4">
+                  <h2 className="font-display text-2xl font-semibold">
+                    {editingReviewId ? "Edit Testimonial / Review" : "Post Testimonial / Review"}
+                  </h2>
                   
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -1324,10 +1548,9 @@ export default function DeveloperAdmin() {
                   </div>
 
                   <div>
-                    <label className="block text-xs uppercase tracking-widest text-[var(--muted)] mb-2">YouTube Embed, Video Link, or Uploaded Video</label>
+                    <label className="block text-xs uppercase tracking-widest text-[var(--muted)] mb-2">YouTube Embed, Video Link, or Uploaded Video (Optional)</label>
                     <textarea
-                      placeholder="Paste <iframe> embed code, YouTube watch link, or upload video below"
-                      required
+                      placeholder="Paste <iframe> embed code, YouTube watch link, or upload video (Optional)"
                       rows={2}
                       className="w-full border border-[var(--line)] p-2.5 text-sm focus:outline-none focus:border-[var(--gold)]"
                       value={reviewForm.youtubeCode}
@@ -1351,16 +1574,27 @@ export default function DeveloperAdmin() {
                     />
                   </div>
 
-                  <button type="submit" disabled={saving} className="btn-gold w-full mt-2">
-                    {saving ? "Posting..." : "Post Review"}
-                  </button>
+                  <div className="flex flex-col gap-2">
+                    <button type="submit" disabled={saving} className="btn-gold w-full mt-2">
+                      {saving ? "Saving..." : editingReviewId ? "Save Changes" : "Post Review"}
+                    </button>
+                    {editingReviewId && (
+                      <button
+                        type="button"
+                        onClick={cancelEditReview}
+                        className="btn-ghost w-full"
+                      >
+                        Cancel Edit
+                      </button>
+                    )}
+                  </div>
                 </form>
 
                 <div className="bg-white p-8 border border-[var(--line)]">
-                  <h2 className="font-display text-2xl mb-4 font-semibold">Video Reviews ({reviews.length})</h2>
+                  <h2 className="font-display text-2xl mb-4 font-semibold">Client Reviews ({reviews.length})</h2>
                   <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
                     {reviews.length === 0 && (
-                      <p className="text-[var(--muted)] text-sm">No video reviews posted yet.</p>
+                      <p className="text-[var(--muted)] text-sm">No reviews posted yet.</p>
                     )}
                     {reviews.map((rev) => (
                       <div key={rev.id} className="border-b border-[var(--line)] pb-4 flex justify-between gap-4 items-start">
@@ -1374,7 +1608,7 @@ export default function DeveloperAdmin() {
                           )}
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
-                              <span className="font-semibold text-sm text-[var(--ink)]">{rev.name || "Anonymous"}</span>
+                              <span className="font-semibold text-sm text-[var(--ink)]">{rev.name || rev.author || "Anonymous"}</span>
                               {rev.rating && (
                                 <span className="text-xs text-[var(--gold-deep)] flex items-center gap-0.5 font-bold">
                                   ★ {rev.rating}
@@ -1385,23 +1619,100 @@ export default function DeveloperAdmin() {
                               {rev.role} {rev.country ? `· ${rev.country}` : ""}
                             </p>
                             <p className="text-sm italic font-medium text-[var(--ink-2)] mt-1.5 line-clamp-2">
-                              "{rev.description}"
+                              "{rev.description || rev.text}"
                             </p>
-                            <p className="text-[10px] text-[var(--muted)] truncate mt-1">Video: {rev.youtubeCode.slice(0, 40)}...</p>
+                            <p className="text-[10px] text-[var(--muted)] truncate mt-1">Video: {rev.youtubeCode ? rev.youtubeCode.slice(0, 40) + "..." : "None"}</p>
                           </div>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => deleteReview(rev.id)}
-                          className="p-1.5 text-red-500 hover:bg-red-50 rounded flex-shrink-0 transition-colors"
-                        >
-                          <Trash size={14} />
-                        </button>
+                        <div className="flex gap-1 flex-shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => startEditReview(rev)}
+                            className="p-1.5 text-blue-500 hover:bg-blue-50 rounded transition-colors"
+                            title="Edit Review"
+                          >
+                            <Edit size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteReview(rev.id)}
+                            className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"
+                            title="Delete Review"
+                          >
+                            <Trash size={14} />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
                 </div>
               </div>
+
+                {/* Reviews Page Header & Ratings Settings */}
+                <form onSubmit={saveReviewsSettings} className="bg-white p-8 border border-[var(--line)] space-y-6 mt-8">
+                  <h2 className="font-display text-2xl font-semibold border-b border-[var(--line)] pb-4">
+                    Reviews Page Settings
+                  </h2>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-xs uppercase tracking-widest text-[var(--muted)] mb-2">Hero Section Title</label>
+                      <input
+                        type="text"
+                        required
+                        className="w-full border border-[var(--line)] p-2.5 text-sm focus:outline-none focus:border-[var(--gold)]"
+                        value={reviewsSettingsForm.hero_title}
+                        onChange={(e) => setReviewsSettingsForm({ ...reviewsSettingsForm, hero_title: e.target.value })}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs uppercase tracking-widest text-[var(--muted)] mb-2">Testimonials Section Title</label>
+                      <input
+                        type="text"
+                        required
+                        className="w-full border border-[var(--line)] p-2.5 text-sm focus:outline-none focus:border-[var(--gold)]"
+                        value={reviewsSettingsForm.testimonials_title}
+                        onChange={(e) => setReviewsSettingsForm({ ...reviewsSettingsForm, testimonials_title: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-xs uppercase tracking-widest text-[var(--muted)] mb-2">Hero Section Description</label>
+                      <textarea
+                        required
+                        rows={3}
+                        className="w-full border border-[var(--line)] p-2.5 text-sm focus:outline-none focus:border-[var(--gold)]"
+                        value={reviewsSettingsForm.hero_description}
+                        onChange={(e) => setReviewsSettingsForm({ ...reviewsSettingsForm, hero_description: e.target.value })}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs uppercase tracking-widest text-[var(--muted)] mb-2">Average Rating Score</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="1"
+                        max="5"
+                        required
+                        className="w-full border border-[var(--line)] p-2.5 text-sm focus:outline-none focus:border-[var(--gold)]"
+                        value={reviewsSettingsForm.average_rating}
+                        onChange={(e) => setReviewsSettingsForm({ ...reviewsSettingsForm, average_rating: parseFloat(e.target.value) || 0 })}
+                      />
+                      <p className="text-[11px] text-[var(--muted)] mt-2">
+                        Enter a decimal between 1.0 and 5.0. This score determines the rating and number of stars displayed on the reviews page.
+                      </p>
+                    </div>
+                  </div>
+
+                  <button type="submit" disabled={saving} className="btn-gold !px-8 !py-3">
+                    {saving ? "Saving Settings..." : "Save Page Settings"}
+                  </button>
+                </form>
+              </>
             )}
             {tab === "status" && (
               <div className="space-y-8">

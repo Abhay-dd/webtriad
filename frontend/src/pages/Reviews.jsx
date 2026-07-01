@@ -9,6 +9,51 @@ export default function Reviews() {
   const [loading, setLoading] = useState(true);
   const [activeVideo, setActiveVideo] = useState(null);
 
+  const [submitForm, setSubmitForm] = useState({
+    name: "",
+    role: "",
+    country: "",
+    rating: 5,
+    description: "",
+    youtubeCode: "",
+    avatar: "",
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+
+  const handleSubmitReview = async (e) => {
+    e.preventDefault();
+    setSubmitError("");
+    setSubmitSuccess(false);
+    setSubmitting(true);
+    try {
+      await axios.post(`${API}/reviews`, submitForm);
+      setSubmitSuccess(true);
+      setSubmitForm({
+        name: "",
+        role: "",
+        country: "",
+        rating: 5,
+        description: "",
+        youtubeCode: "",
+        avatar: "",
+      });
+      const res = await axios.get(`${API}/reviews`);
+      setReviews(res.data?.results || []);
+    } catch (err) {
+      setSubmitError(err.response?.data?.detail || "Failed to submit review. Please try again.");
+    }
+    setSubmitting(false);
+  };
+
+  const [settings, setSettings] = useState({
+    hero_title: "Real stories, real trust.",
+    hero_description: "Listen to video reviews and experiences shared by international and local buyers who acquired properties through Triad.",
+    testimonials_title: "Trusted advice, clear outcomes.",
+    average_rating: 4.9,
+  });
+
   useEffect(() => {
     axios
       .get(`${API}/reviews`)
@@ -17,6 +62,15 @@ export default function Reviews() {
       })
       .catch((err) => {
         console.error("Error loading reviews:", err);
+      });
+
+    axios
+      .get(`${API}/settings/reviews`)
+      .then((res) => {
+        if (res.data) setSettings(res.data);
+      })
+      .catch((err) => {
+        console.error("Error loading reviews settings:", err);
       })
       .finally(() => {
         setLoading(false);
@@ -86,16 +140,19 @@ export default function Reviews() {
     );
   };
 
+  const videoReviews = reviews.filter((r) => r.youtubeCode && r.youtubeCode.trim() !== "");
+  const textReviews = reviews.filter((r) => !r.youtubeCode || r.youtubeCode.trim() === "");
+
   return (
     <>
       <section className="pt-40 pb-12 section-pad bg-white" data-testid="reviews-hero">
         <div className="container-x px-5 lg:px-12">
           <div className="overline text-[var(--gold-deep)]">Client Testimonials</div>
           <h1 className="font-display text-5xl md:text-7xl mt-6 leading-[0.95]">
-            Real stories, <em className="text-[var(--gold-deep)]">real trust.</em>
+            {settings.hero_title}
           </h1>
           <p className="text-lg mt-6 max-w-2xl text-[var(--ink-2)]">
-            Listen to video reviews and experiences shared by international and local buyers who acquired properties through Triad.
+            {settings.hero_description}
           </p>
         </div>
       </section>
@@ -106,7 +163,7 @@ export default function Reviews() {
             <div className="text-center py-20 text-[var(--muted)] border border-[var(--line)] bg-[var(--bg-alt)]">
               Loading video reviews...
             </div>
-          ) : reviews.length === 0 ? (
+          ) : videoReviews.length === 0 ? (
             <div className="text-center py-20 border border-[var(--line)] bg-[var(--bg-alt)]">
               <Film className="mx-auto text-[var(--gold)] mb-4" size={32} />
               <p className="font-display text-2xl text-[var(--ink)]">No video reviews posted yet.</p>
@@ -116,7 +173,7 @@ export default function Reviews() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {reviews.map((rev) => {
+              {videoReviews.map((rev) => {
                 const hasVideo = !!rev.youtubeCode;
                 const ytThumb = getVideoThumbnail(rev.youtubeCode);
                 const isDirectVideo = hasVideo && !rev.youtubeCode.includes("<iframe") && !ytThumb;
@@ -224,14 +281,13 @@ export default function Reviews() {
             <div className="lg:col-span-4 lg:sticky lg:top-32" data-reveal>
               <span className="text-xs uppercase tracking-[0.25em] text-[var(--gold)] font-medium">Client Testimonials</span>
               <h2 className="font-display text-4xl md:text-5xl mt-4 leading-tight">
-                Trusted advice,<br />
-                <span className="italic text-[var(--gold)]">clear outcomes.</span>
+                {settings.testimonials_title}
               </h2>
               
               <div className="mt-10 p-8 bg-white/5 border border-white/10 backdrop-blur-sm rounded-sm flex flex-col items-center text-center">
-                <div className="font-display text-7xl md:text-8xl text-[var(--gold)] font-light leading-none">4.9</div>
+                <div className="font-display text-7xl md:text-8xl text-[var(--gold)] font-light leading-none">{settings.average_rating}</div>
                 <div className="flex gap-1.5 mt-4 mb-2">
-                  {Array.from({ length: 5 }).map((_, i) => (
+                  {Array.from({ length: Math.min(5, Math.max(1, Math.round(settings.average_rating))) }).map((_, i) => (
                     <Star key={i} size={20} className="text-[var(--gold)] fill-[var(--gold)]" />
                   ))}
                 </div>
@@ -241,29 +297,159 @@ export default function Reviews() {
 
             {/* Right Testimonial Cards Column */}
             <div className="lg:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-6" data-reveal>
-              {REVIEWS.slice(0, 4).map((r) => (
-                <div 
-                  key={r.name} 
-                  className="bg-white/5 border border-white/10 p-8 hover:border-[var(--gold)]/40 hover:bg-white/10 hover:-translate-y-1 transition-all duration-500 relative flex flex-col justify-between group rounded-sm"
-                  data-testid={`review-${r.name.toLowerCase().replace(/\s+/g, "-")}`}
-                >
-                  <div>
-                    <Quote className="text-[var(--gold)] opacity-40 group-hover:opacity-100 transition-opacity duration-300 mb-6" size={24} />
-                    <p className="font-display text-xl leading-relaxed text-white/95 font-light italic">
-                      "{r.quote}"
-                    </p>
-                  </div>
-                  <div className="mt-8 pt-6 border-t border-white/10">
-                    <div className="font-medium text-white text-base tracking-wide">{r.name}</div>
-                    <div className="text-xs text-[var(--gold)]/80 mt-1 tracking-wider uppercase font-medium">
-                      {r.role} · {r.country}
+              {(textReviews.length > 0 ? textReviews : REVIEWS).slice(0, 4).map((r) => {
+                const quoteText = r.quote || r.description || r.text;
+                const clientName = r.name || r.author || "Verified Client";
+                return (
+                  <div 
+                    key={r.id || r.name} 
+                    className="bg-white/5 border border-white/10 p-8 hover:border-[var(--gold)]/40 hover:bg-white/10 hover:-translate-y-1 transition-all duration-500 relative flex flex-col justify-between group rounded-sm"
+                    data-testid={`review-${clientName.toLowerCase().replace(/\s+/g, "-")}`}
+                  >
+                    <div>
+                      <Quote className="text-[var(--gold)] opacity-40 group-hover:opacity-100 transition-opacity duration-300 mb-6" size={24} />
+                      <p className="font-display text-xl leading-relaxed text-white/95 font-light italic">
+                        "{quoteText}"
+                      </p>
+                    </div>
+                    <div className="mt-8 pt-6 border-t border-white/10">
+                      <div className="font-medium text-white text-base tracking-wide">{clientName}</div>
+                      <div className="text-xs text-[var(--gold)]/80 mt-1 tracking-wider uppercase font-medium">
+                        {r.role || "Client"} {r.country ? `· ${r.country}` : ""}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
           </div>
+        </div>
+      </section>
+
+      {/* WRITE A REVIEW FORM */}
+      <section className="section-pad bg-white border-t border-[var(--line)]" data-testid="write-review-section">
+        <div className="container-x px-5 lg:px-12 max-w-4xl mx-auto">
+          <div className="text-center mb-12">
+            <span className="text-xs uppercase tracking-[0.25em] text-[var(--gold-deep)] font-medium">Share Your Experience</span>
+            <h2 className="font-display text-4xl md:text-5xl mt-4 leading-tight">
+              Submit Your Review
+            </h2>
+            <p className="text-sm mt-3 text-[var(--muted)]">
+              Your feedback helps us continuously refine our real estate advisory services.
+            </p>
+          </div>
+
+          <form onSubmit={handleSubmitReview} className="bg-[var(--bg-alt)] border border-[var(--line)] p-8 md:p-12 space-y-6">
+            {submitSuccess && (
+              <div className="bg-green-50 border border-green-200 text-green-800 p-4 rounded text-sm font-medium animate-fade-in">
+                ✓ Thank you! Your review has been submitted successfully.
+              </div>
+            )}
+
+            {submitError && (
+              <div className="bg-red-50 border border-red-200 text-red-800 p-4 rounded text-sm font-medium animate-fade-in">
+                ⚠️ {submitError}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-xs uppercase tracking-widest text-[var(--muted)] mb-2 font-medium">Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. John Doe"
+                  className="w-full border-b border-[var(--line)] bg-transparent py-2.5 text-sm focus:outline-none focus:border-[var(--gold-deep)] transition-colors"
+                  value={submitForm.name}
+                  onChange={(e) => setSubmitForm({ ...submitForm, name: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs uppercase tracking-widest text-[var(--muted)] mb-2 font-medium">Role / Occupation</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Off-Plan Buyer, Investor"
+                  className="w-full border-b border-[var(--line)] bg-transparent py-2.5 text-sm focus:outline-none focus:border-[var(--gold-deep)] transition-colors"
+                  value={submitForm.role}
+                  onChange={(e) => setSubmitForm({ ...submitForm, role: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-xs uppercase tracking-widest text-[var(--muted)] mb-2 font-medium">Country</label>
+                <input
+                  type="text"
+                  placeholder="e.g. United Kingdom"
+                  className="w-full border-b border-[var(--line)] bg-transparent py-2.5 text-sm focus:outline-none focus:border-[var(--gold-deep)] transition-colors"
+                  value={submitForm.country}
+                  onChange={(e) => setSubmitForm({ ...submitForm, country: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs uppercase tracking-widest text-[var(--muted)] mb-2 font-medium">Rating</label>
+                <select
+                  className="w-full border-b border-[var(--line)] bg-transparent py-2.5 text-sm focus:outline-none focus:border-[var(--gold-deep)] transition-colors bg-white cursor-pointer"
+                  value={submitForm.rating}
+                  onChange={(e) => setSubmitForm({ ...submitForm, rating: Number(e.target.value) })}
+                >
+                  <option value={5}>5 Stars ★★★★★</option>
+                  <option value={4}>4 Stars ★★★★☆</option>
+                  <option value={3}>3 Stars ★★★☆☆</option>
+                  <option value={2}>2 Stars ★★☆☆☆</option>
+                  <option value={1}>1 Star ★☆☆☆☆</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-xs uppercase tracking-widest text-[var(--muted)] mb-2 font-medium">Profile Image URL (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="Link to your avatar photo"
+                  className="w-full border-b border-[var(--line)] bg-transparent py-2.5 text-sm focus:outline-none focus:border-[var(--gold-deep)] transition-colors"
+                  value={submitForm.avatar}
+                  onChange={(e) => setSubmitForm({ ...submitForm, avatar: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs uppercase tracking-widest text-[var(--muted)] mb-2 font-medium">YouTube Video link / Embed (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="YouTube video review link"
+                  className="w-full border-b border-[var(--line)] bg-transparent py-2.5 text-sm focus:outline-none focus:border-[var(--gold-deep)] transition-colors"
+                  value={submitForm.youtubeCode}
+                  onChange={(e) => setSubmitForm({ ...submitForm, youtubeCode: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs uppercase tracking-widest text-[var(--muted)] mb-2 font-medium">Review Text</label>
+              <textarea
+                required
+                rows={4}
+                placeholder="Share your experience working with Triad Realty..."
+                className="w-full border border-[var(--line)] bg-transparent p-4 text-sm focus:outline-none focus:border-[var(--gold-deep)] transition-colors"
+                value={submitForm.description}
+                onChange={(e) => setSubmitForm({ ...submitForm, description: e.target.value })}
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={submitting}
+              className="btn-gold w-full py-4 text-center cursor-pointer transition-transform hover:scale-[1.01]"
+            >
+              {submitting ? "Submitting..." : "Submit Review"}
+            </button>
+          </form>
         </div>
       </section>
 

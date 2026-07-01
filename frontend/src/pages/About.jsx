@@ -80,13 +80,16 @@ export default function About() {
         <div className="overline text-[var(--gold)]">The Founders</div>
         <h2 className="font-display text-4xl md:text-6xl mt-3 leading-none">Three. Triad.</h2>
 
-        {/* Three Founders Group Photo */}
-        <div className="w-full aspect-[21/9] bg-white/5 overflow-hidden relative shadow-lg mt-12 img-zoom border border-white/10">
+        {/* Three Founders Group Photo — full colour with text overlay */}
+        <div className="w-full aspect-[21/9] overflow-hidden relative shadow-lg mt-12 img-zoom border border-white/10">
           <img
-            src="/three_founders.jpg"
+            src="/group_photo.jpg"
             alt="Three Founders of Triad Realty"
-            className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-700 opacity-90 hover:opacity-100"
+            className="w-full h-full object-cover transition-all duration-700"
           />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent flex items-end p-8 md:p-12">
+            <h2 className="font-display text-4xl md:text-5xl text-white">Three founders. One conviction.</h2>
+          </div>
         </div>
 
         {/* Founder Cards — directly below the photo, Home-page dark style */}
@@ -276,23 +279,25 @@ export default function About() {
 
   return (
     <>
-      <section className="bg-white" data-testid="about-hero">
-        {/* Header Banner Image (50vh) */}
-        <div className="w-full h-[50vh] bg-[var(--bg-alt)] overflow-hidden relative border-b border-[var(--line)]">
-          <img
-            src="/background.png"
-            alt="Triad Realty Banner"
-            className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-700"
-          />
-        </div>
-        <div className="container-x pt-20 pb-10">
-          <div className="overline text-[var(--gold-deep)]">About Triad</div>
-          <h1 className="font-display text-5xl md:text-8xl leading-[0.95] mt-6 max-w-5xl">
-            Property, practiced as a <em className="text-[var(--gold-deep)]">craft.</em>
-          </h1>
-          <p className="text-lg md:text-xl mt-8 max-w-2xl leading-relaxed text-[var(--ink-2)]">
-            We're a Dubai-based consultancy that treats real estate the way a great gallery treats an artist's catalogue — with research, restraint, and the long view.
-          </p>
+      <section className="relative h-[45vh] min-h-[350px] w-full overflow-hidden bg-neutral-950 flex items-end pb-12 border-b border-white/10" data-testid="about-hero">
+        <img
+          src="/background.png"
+          alt="Triad Realty Banner"
+          className="absolute inset-0 w-full h-full object-cover opacity-45"
+        />
+        {/* Gradient overlay for contrast and premium feel */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-black/60 z-[2]" />
+        
+        <div className="container-x relative px-5 lg:px-12 z-[3] w-full">
+          <div className="max-w-4xl">
+            <div className="overline text-[var(--gold)] tracking-[0.25em] text-xs">About Triad</div>
+            <h1 className="font-display text-4xl md:text-5xl mt-3 tracking-tight leading-tight text-white">
+              Property, practiced as a <em className="text-[var(--gold)]">craft.</em>
+            </h1>
+            <p className="text-sm md:text-base mt-4 text-white/70 max-w-2xl leading-relaxed">
+              We're a Dubai-based consultancy that treats real estate the way a great gallery treats an artist's catalogue — with research, restraint, and the long view.
+            </p>
+          </div>
         </div>
       </section>
 
@@ -318,17 +323,7 @@ export default function About() {
         </div>
       </section>
 
-      <section className="pb-20 bg-[var(--bg-alt)]" data-testid="about-group-photo">
-        <div className="container-x">
-          <div className="w-full aspect-[21/9] bg-[var(--ink)] overflow-hidden relative shadow-sm img-zoom">
-            <img
-              src="/group_photo.jpg"
-              alt="Triad Realty Team Group"
-              className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-700"
-            />
-          </div>
-        </div>
-      </section>
+
 
       <section className="section-pad bg-white" data-testid="about-journey">
         <div className="container-x">

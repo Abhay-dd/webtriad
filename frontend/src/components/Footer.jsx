@@ -1,9 +1,18 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Instagram, Linkedin, Mail, Phone, MapPin, MessageCircle } from "lucide-react";
+import { Instagram, Linkedin, Mail, Phone, MapPin, MessageCircle, ArrowUpRight } from "lucide-react";
 import { COMPANY, NAV } from "../data";
 import axios from "axios";
 import { API_URL as API } from "../config";
+
+const SERVICES = [
+  "Off-Plan Investment",
+  "Resale Advisory",
+  "Portfolio Management",
+  "Market Research",
+  "International Buyers",
+  "Family Residences",
+];
 
 export default function Footer() {
   const [contact, setContact] = useState({
@@ -34,48 +43,124 @@ export default function Footer() {
 
   return (
     <footer data-testid="site-footer" className="bg-[var(--ink)] text-white relative overflow-hidden">
-      <div className="grain absolute inset-0" />
-      <div className="container-x relative section-pad pt-24 pb-10">
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-12">
-          <div className="md:col-span-5">
-            <div className="flex items-center gap-3">
+      {/* Gold accent bar */}
+      <div
+        className="absolute top-0 left-0 right-0 h-[3px]"
+        style={{ background: "var(--gold-gradient)" }}
+      />
+
+      {/* Subtle dot-grid watermark */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px)",
+          backgroundSize: "28px 28px",
+        }}
+      />
+
+      <div className="container-x relative pt-20 pb-10 px-5 lg:px-12">
+        {/* Main grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-12 lg:gap-8">
+
+          {/* Col 1-2: Brand + contact */}
+          <div className="lg:col-span-5">
+            <Link to="/" className="flex items-center gap-3 group">
               <img
                 src="/triad_logo.jpeg"
                 alt="Triad Realty Logo"
-                className="h-14 w-auto object-contain"
+                className="h-12 w-auto object-contain opacity-90 group-hover:opacity-100 transition-opacity"
               />
               <div>
-                <div className="font-display text-2xl">TRIAD REALTY</div>
-                <div className="overline opacity-60">UAE · Investment Consultants</div>
+                <div className="font-display text-xl tracking-tight">TRIAD REALTY</div>
+                <div className="overline text-[8px] opacity-50 mt-0.5">UAE · Investment Consultants</div>
               </div>
-            </div>
-            <p className="font-display text-3xl md:text-4xl leading-tight mt-10 max-w-md">
-              Property as a craft. Investment as a relationship.
+            </Link>
+
+            <p className="font-display text-2xl md:text-3xl leading-snug mt-8 max-w-sm text-white/90">
+              Property as a craft.<br />
+              <span className="text-[var(--gold)]">Investment</span> as a relationship.
             </p>
-            <div className="mt-10 space-y-3 text-sm opacity-80">
-              <div className="flex items-start gap-3"><MapPin size={16} className="mt-1 text-[var(--gold)] flex-shrink-0" /><span>{contact.address}</span></div>
-              <a href={`tel:${contact.phone.replace(/\s/g, "")}`} className="flex items-center gap-3 link-gold text-white" data-testid="footer-phone"><Phone size={16} className="text-[var(--gold)]" />{contact.phone}</a>
-              <a href={`mailto:${contact.email}`} className="flex items-center gap-3 link-gold text-white" data-testid="footer-email"><Mail size={16} className="text-[var(--gold)]" />{contact.email}</a>
+
+            {/* Contact info */}
+            <div className="mt-8 space-y-3">
+              <div className="flex items-start gap-3 text-sm text-white/65">
+                <MapPin size={14} className="mt-0.5 text-[var(--gold)] flex-shrink-0" />
+                <span>{contact.address}</span>
+              </div>
+              <a
+                href={`tel:${contact.phone.replace(/\s/g, "")}`}
+                className="flex items-center gap-3 text-sm text-white/65 hover:text-[var(--gold)] transition-colors"
+                data-testid="footer-phone"
+              >
+                <Phone size={14} className="text-[var(--gold)] flex-shrink-0" />
+                {contact.phone}
+              </a>
+              <a
+                href={`mailto:${contact.email}`}
+                className="flex items-center gap-3 text-sm text-white/65 hover:text-[var(--gold)] transition-colors"
+                data-testid="footer-email"
+              >
+                <Mail size={14} className="text-[var(--gold)] flex-shrink-0" />
+                {contact.email}
+              </a>
             </div>
-            <div className="mt-8 flex gap-4">
+
+            {/* Social icons */}
+            <div className="mt-8 flex gap-3">
               {contact.instagram && (
-                <a href={contact.instagram} target="_blank" rel="noreferrer" className="w-11 h-11 border border-white/30 flex items-center justify-center hover:bg-[var(--gold)] hover:border-[var(--gold)] hover:text-[var(--ink)] transition-all" data-testid="footer-instagram"><Instagram size={16} /></a>
+                <a
+                  href={contact.instagram}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-10 h-10 rounded-full border border-white/15 flex items-center justify-center text-white/50 hover:border-[var(--gold)] hover:text-[var(--gold)] hover:bg-[var(--gold)]/10 transition-all duration-300"
+                  data-testid="footer-instagram"
+                  aria-label="Instagram"
+                >
+                  <Instagram size={15} />
+                </a>
               )}
               {contact.linkedin && (
-                <a href={contact.linkedin} target="_blank" rel="noreferrer" className="w-11 h-11 border border-white/30 flex items-center justify-center hover:bg-[var(--gold)] hover:border-[var(--gold)] hover:text-[var(--ink)] transition-all" data-testid="footer-linkedin"><Linkedin size={16} /></a>
+                <a
+                  href={contact.linkedin}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-10 h-10 rounded-full border border-white/15 flex items-center justify-center text-white/50 hover:border-[var(--gold)] hover:text-[var(--gold)] hover:bg-[var(--gold)]/10 transition-all duration-300"
+                  data-testid="footer-linkedin"
+                  aria-label="LinkedIn"
+                >
+                  <Linkedin size={15} />
+                </a>
               )}
               {contact.whatsapp && (
-                <a href={contact.whatsapp} target="_blank" rel="noreferrer" className="w-11 h-11 border border-white/30 flex items-center justify-center hover:bg-[var(--gold)] hover:border-[var(--gold)] hover:text-[var(--ink)] transition-all" data-testid="footer-whatsapp"><MessageCircle size={16} /></a>
+                <a
+                  href={contact.whatsapp}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-10 h-10 rounded-full border border-white/15 flex items-center justify-center text-white/50 hover:border-[var(--gold)] hover:text-[var(--gold)] hover:bg-[var(--gold)]/10 transition-all duration-300"
+                  data-testid="footer-whatsapp"
+                  aria-label="WhatsApp"
+                >
+                  <MessageCircle size={15} />
+                </a>
               )}
             </div>
           </div>
 
-          <div className="md:col-span-3">
-            <div className="overline opacity-50 mb-5">Quick Links</div>
-            <ul className="space-y-3">
+          {/* Col 3: Navigation */}
+          <div className="lg:col-span-2">
+            <div className="flex items-center gap-2 mb-5">
+              <span className="overline text-white/35">Navigation</span>
+              <span className="h-px flex-1 bg-white/10" />
+            </div>
+            <ul className="space-y-2.5">
               {NAV.map((n) => (
                 <li key={n.to}>
-                  <Link to={n.to} className="text-sm opacity-85 hover:text-[var(--gold)] transition-colors" data-testid={`footer-link-${n.label.toLowerCase().replace(/\s+/g, "-")}`}>
+                  <Link
+                    to={n.to}
+                    className="text-sm text-white/55 hover:text-[var(--gold)] transition-colors duration-200 flex items-center gap-1.5 group"
+                    data-testid={`footer-link-${n.label.toLowerCase().replace(/\s+/g, "-")}`}
+                  >
+                    <span className="w-0 h-px bg-[var(--gold)] group-hover:w-3 transition-all duration-300" />
                     {n.label}
                   </Link>
                 </li>
@@ -83,53 +168,81 @@ export default function Footer() {
             </ul>
           </div>
 
-          <div className="md:col-span-4">
-            <div className="overline opacity-50 mb-5">Get In Touch</div>
-            <div className="space-y-4">
+          {/* Col 4: Services */}
+          <div className="lg:col-span-2">
+            <div className="flex items-center gap-2 mb-5">
+              <span className="overline text-white/35">Services</span>
+              <span className="h-px flex-1 bg-white/10" />
+            </div>
+            <ul className="space-y-2.5">
+              {SERVICES.map((s) => (
+                <li key={s}>
+                  <Link
+                    to="/contact"
+                    className="text-sm text-white/55 hover:text-[var(--gold)] transition-colors duration-200 flex items-center gap-1.5 group"
+                  >
+                    <span className="w-0 h-px bg-[var(--gold)] group-hover:w-3 transition-all duration-300" />
+                    {s}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Col 5: Get in Touch CTAs */}
+          <div className="lg:col-span-3">
+            <div className="flex items-center gap-2 mb-5">
+              <span className="overline text-white/35">Get in Touch</span>
+              <span className="h-px flex-1 bg-white/10" />
+            </div>
+            <div className="space-y-3">
               <a
                 href={contact.whatsapp}
                 target="_blank"
                 rel="noreferrer"
-                className="group flex items-center gap-3 border border-white/20 rounded px-4 py-3 hover:bg-[var(--gold)] hover:border-[var(--gold)] hover:text-[var(--ink)] transition-all"
+                className="group flex items-center justify-between gap-3 border border-white/10 px-4 py-3.5 hover:border-[var(--gold)] hover:bg-[var(--gold)]/5 transition-all duration-300 rounded-sm"
                 data-testid="footer-whatsapp-cta"
               >
-                <MessageCircle size={18} className="text-[var(--gold)] group-hover:text-[var(--ink)] transition-colors flex-shrink-0" />
-                <div>
-                  <p className="text-sm font-medium">WhatsApp Us</p>
-                  <p className="text-xs opacity-60 group-hover:opacity-80 mt-0.5">{contact.phone}</p>
+                <div className="flex items-center gap-3">
+                  <MessageCircle size={16} className="text-[var(--gold)] flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-white">WhatsApp Us</p>
+                    <p className="text-xs text-white/40 mt-0.5">{contact.phone}</p>
+                  </div>
                 </div>
+                <ArrowUpRight size={14} className="text-white/20 group-hover:text-[var(--gold)] transition-colors flex-shrink-0" />
               </a>
+
               <a
                 href={`mailto:${contact.email}`}
-                className="group flex items-center gap-3 border border-white/20 rounded px-4 py-3 hover:bg-[var(--gold)] hover:border-[var(--gold)] hover:text-[var(--ink)] transition-all"
+                className="group flex items-center justify-between gap-3 border border-white/10 px-4 py-3.5 hover:border-[var(--gold)] hover:bg-[var(--gold)]/5 transition-all duration-300 rounded-sm"
                 data-testid="footer-email-cta"
               >
-                <Mail size={18} className="text-[var(--gold)] group-hover:text-[var(--ink)] transition-colors flex-shrink-0" />
-                <div>
-                  <p className="text-sm font-medium">Email Us</p>
-                  <p className="text-xs opacity-60 group-hover:opacity-80 mt-0.5">{contact.email}</p>
+                <div className="flex items-center gap-3">
+                  <Mail size={16} className="text-[var(--gold)] flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-white">Email Us</p>
+                    <p className="text-xs text-white/40 mt-0.5">{contact.email}</p>
+                  </div>
                 </div>
+                <ArrowUpRight size={14} className="text-white/20 group-hover:text-[var(--gold)] transition-colors flex-shrink-0" />
               </a>
-              <a
-                href={contact.instagram}
-                target="_blank"
-                rel="noreferrer"
-                className="group flex items-center gap-3 border border-white/20 rounded px-4 py-3 hover:bg-[var(--gold)] hover:border-[var(--gold)] hover:text-[var(--ink)] transition-all"
-                data-testid="footer-instagram-cta"
+
+              <Link
+                to="/contact?type=consultation"
+                className="group flex items-center justify-center gap-2 w-full py-3 mt-2 text-xs uppercase tracking-[0.2em] border border-[var(--gold)]/40 text-[var(--gold)] hover:bg-[var(--gold)] hover:text-[var(--ink)] hover:border-[var(--gold)] transition-all duration-300 rounded-sm font-medium"
               >
-                <Instagram size={18} className="text-[var(--gold)] group-hover:text-[var(--ink)] transition-colors flex-shrink-0" />
-                <div>
-                  <p className="text-sm font-medium">Follow on Instagram</p>
-                  <p className="text-xs opacity-60 group-hover:opacity-80 mt-0.5">@triadrealty.ae</p>
-                </div>
-              </a>
+                Book a Consultation
+                <ArrowUpRight size={12} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+              </Link>
             </div>
           </div>
         </div>
 
-        <div className="border-t border-white/10 mt-16 pt-8 flex flex-col md:flex-row gap-3 justify-between text-xs opacity-50">
-          <div>© {new Date().getFullYear()} Triad Realty LLC. All rights reserved.</div>
-          <div className="tracking-[0.22em] uppercase">RERA Registered · Dubai Land Department</div>
+        {/* Bottom bar */}
+        <div className="border-t border-white/8 mt-16 pt-7 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-white/30">
+          <span>© {new Date().getFullYear()} Triad Realty LLC. All rights reserved.</span>
+          <span className="tracking-[0.22em] uppercase">RERA Registered · Dubai Land Department</span>
         </div>
       </div>
     </footer>

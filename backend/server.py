@@ -413,6 +413,14 @@ class PopupSettingsIn(BaseModel):
     popup_type: Optional[str] = None
 
 
+class ReviewsSettingsIn(BaseModel):
+    hero_title: str
+    hero_description: str
+    testimonials_title: str
+    average_rating: float
+
+
+
 class ConsultationIn(BaseModel):
     """Booking payload submitted from the public consultation modal."""
     model_config = ConfigDict(extra="ignore")
@@ -472,10 +480,12 @@ class ProjectIn(BaseModel):
     amenities: Optional[list] = None
     payment_plan: Optional[list] = None
     floor_plan: Optional[str] = Field(None, max_length=500)
+    floor_plans: Optional[list] = None
     map_image: Optional[str] = Field(None, max_length=500)
     transactions: Optional[list] = None
     description: Optional[str] = Field(None, max_length=5000)
     source: Optional[str] = Field(None, max_length=50)
+    brochure_url: Optional[str] = Field(None, max_length=500)
 
     @field_validator("name", "developer", "location", "emirate", "type", "tagline", "description", mode="before")
     @classmethod
@@ -507,14 +517,19 @@ class ReviewIn(BaseModel):
     """Validated review payload for admin create."""
     model_config = ConfigDict(extra="ignore")
     id: Optional[str] = Field(None, max_length=150)
-    author: str = Field(..., min_length=1, max_length=120)
-    rating: int = Field(..., ge=1, le=5)
-    text: str = Field(..., min_length=1, max_length=2000)
+    author: Optional[str] = Field(None, max_length=120)
+    name: Optional[str] = Field(None, max_length=120)
+    rating: int = Field(5, ge=1, le=5)
+    text: Optional[str] = Field(None, max_length=2000)
+    description: Optional[str] = Field(None, max_length=2000)
     date: Optional[str] = Field(None, max_length=50)
     avatar: Optional[str] = Field(None, max_length=500)
     source: Optional[str] = Field(None, max_length=100)
+    role: Optional[str] = Field(None, max_length=120)
+    country: Optional[str] = Field(None, max_length=120)
+    youtubeCode: Optional[str] = Field(None, max_length=2000)
 
-    @field_validator("author", "text", mode="before")
+    @field_validator("author", "name", "text", "description", "role", "country", "youtubeCode", mode="before")
     @classmethod
     def strip_str(cls, v: Any) -> Any:
         return v.strip() if isinstance(v, str) else v
@@ -582,6 +597,15 @@ DEFAULT_HOMEPAGE_SETTINGS = {
     "company_whatsapp": "https://wa.me/971545193393?text=Hello%2C%20I%27m%20interested%20in%20a%20property%20consultation.",
     "company_instagram": "https://www.instagram.com/triadrealty.ae?igsh=MWZpd2pmeTZwMGhzcA==",
     "company_linkedin": "https://www.linkedin.com/company/triadrealty-ae/",
+}
+
+
+DEFAULT_REVIEWS_SETTINGS = {
+    "id": "reviews",
+    "hero_title": "Real stories, real trust.",
+    "hero_description": "Listen to video reviews and experiences shared by international and local buyers who acquired properties through Triad.",
+    "testimonials_title": "Trusted advice, clear outcomes.",
+    "average_rating": 4.9,
 }
 
 
@@ -774,6 +798,40 @@ async def seed_content():
     if not await db_find_one("settings", {"id": "homepage"}):
         await db_insert("settings", dict(DEFAULT_HOMEPAGE_SETTINGS))
         logger.info("Seeded default homepage settings")
+    if not await db_find_one("settings", {"id": "reviews"}):
+        await db_insert("settings", dict(DEFAULT_REVIEWS_SETTINGS))
+        logger.info("Seeded default reviews settings")
+    # Seed default text testimonials into the reviews collection so admin can edit them
+    text_review_count = await db_count("reviews")
+    if text_review_count == 0:
+        default_testimonials = [
+            {
+                "id": f"seed-review-{i}",
+                "name": item["name"],
+                "role": item["role"],
+                "country": item["country"],
+                "rating": item["rating"],
+                "description": item["quote"],
+                "youtubeCode": "",
+                "avatar": "",
+                "createdAt": now_iso(),
+            }
+            for i, item in enumerate([
+                {"name": "Client Review 01", "role": "Off-Plan Buyer", "country": "UAE", "rating": 5,
+                 "quote": "Triad explained every launch, payment plan, and risk with complete clarity. I felt informed at each step and confident before booking my unit."},
+                {"name": "Client Review 02", "role": "Business Owner", "country": "UAE", "rating": 5,
+                 "quote": "The team understood my budget quickly, shortlisted serious options, and handled the negotiation professionally. Their follow-up after booking was excellent."},
+                {"name": "Client Review 03", "role": "Portfolio Investor", "country": "India", "rating": 5,
+                 "quote": "What stood out was the transparency. Triad compared communities, rental potential, and exit options in a way that made the decision process simple."},
+                {"name": "Client Review 04", "role": "International Buyer", "country": "United Kingdom", "rating": 5,
+                 "quote": "Buying from overseas felt much easier with Triad managing the details. They were responsive, honest, and careful with every document and deadline."},
+                {"name": "Client Review 05", "role": "Family Buyer", "country": "UAE", "rating": 5,
+                 "quote": "They listened to our family needs first, then suggested communities that matched our lifestyle, schools, and long-term plans. The guidance felt personal."},
+            ])
+        ]
+        for t in default_testimonials:
+            await db_insert("reviews", t)
+        logger.info("Seeded %d default text testimonials into reviews", len(default_testimonials))
     if await db_count("experience") == 0:
         for i, url in enumerate(GALLERY):
             await db_insert("experience", {
@@ -1701,6 +1759,14 @@ async def get_team_settings():
     return {**DEFAULT_TEAM_SETTINGS, **s}
 
 
+@api_router.get("/settings/reviews")
+async def get_reviews_settings():
+    s = await db_find_one("settings", {"id": "reviews"})
+    if not s:
+        return DEFAULT_REVIEWS_SETTINGS
+    return {**DEFAULT_REVIEWS_SETTINGS, **s}
+
+
 @api_router.get("/projects")
 async def list_projects(
     emirate: Optional[str] = None,
@@ -1755,6 +1821,28 @@ async def list_careers():
 async def list_reviews():
     items = await db_find("reviews")
     return {"count": len(items), "results": items}
+
+
+@api_router.post("/reviews")
+async def public_create_review(payload: ReviewIn):
+    doc = payload.model_dump(exclude_none=True)
+    if not doc.get("id"):
+        doc["id"] = str(uuid.uuid4())
+    doc["createdAt"] = now_iso()
+    
+    # Unify name/author and description/text
+    if doc.get("name"):
+        doc["author"] = doc["name"]
+    elif doc.get("author"):
+        doc["name"] = doc["author"]
+        
+    if doc.get("description"):
+        doc["text"] = doc["description"]
+    elif doc.get("text"):
+        doc["description"] = doc["text"]
+        
+    await db_insert("reviews", doc)
+    return doc
 
 
 @api_router.get("/experience")
@@ -1833,8 +1921,42 @@ async def admin_create_review(payload: ReviewIn, _=Depends(require_developer)):
     if not doc.get("id"):
         doc["id"] = str(uuid.uuid4())
     doc["createdAt"] = now_iso()
+    
+    # Unify name/author and description/text
+    if doc.get("name"):
+        doc["author"] = doc["name"]
+    elif doc.get("author"):
+        doc["name"] = doc["author"]
+        
+    if doc.get("description"):
+        doc["text"] = doc["description"]
+    elif doc.get("text"):
+        doc["description"] = doc["text"]
+        
     await db_insert("reviews", doc)
     return doc
+
+
+@api_router.patch("/admin/reviews/{review_id}")
+async def admin_update_review(review_id: str, payload: ReviewIn, _=Depends(require_developer)):
+    r = await db_find_one("reviews", {"id": review_id})
+    if not r:
+        raise HTTPException(status_code=404, detail="Review not found")
+    updates = payload.model_dump(exclude_none=True)
+    updates.pop("id", None)
+    
+    # Unify name/author and description/text
+    if "name" in updates:
+        updates["author"] = updates["name"]
+    elif "author" in updates:
+        updates["name"] = updates["author"]
+        
+    if "description" in updates:
+        updates["text"] = updates["description"]
+    elif "text" in updates:
+        updates["description"] = updates["text"]
+        
+    return await db_update("reviews", review_id, updates)
 
 
 @api_router.delete("/admin/reviews/{review_id}")
@@ -2127,9 +2249,74 @@ def _normalize_reelly_project(item: dict) -> dict:
     configs = [b.strip() for b in str(beds_raw).split(",") if b.strip()] if beds_raw else []
 
     cover = item.get("cover_image_url") or item.get("hero") or ""
-    gallery = item.get("gallery") or []
-    if isinstance(gallery, str):
-        gallery = [gallery]
+    
+    # Collect from structured lobby, interior, and architecture fields
+    gallery_images = []
+    for section in ["lobby", "interior", "architecture"]:
+        sec_imgs = item.get(section) or []
+        if isinstance(sec_imgs, list):
+            for img in sec_imgs:
+                if isinstance(img, dict) and img.get("url"):
+                    gallery_images.append(img["url"])
+                elif isinstance(img, str):
+                    gallery_images.append(img)
+                    
+    # Fallback to general gallery field
+    if not gallery_images:
+        gallery = item.get("gallery") or []
+        if isinstance(gallery, str):
+            gallery_images = [gallery]
+        elif isinstance(gallery, list):
+            for img in gallery:
+                if isinstance(img, dict) and img.get("url"):
+                    gallery_images.append(img["url"])
+                elif isinstance(img, str):
+                    gallery_images.append(img)
+
+    # Reelly API brochure field
+    brochure_url = item.get("marketing_brochure") or ""
+
+    # Reelly API floor plans array
+    floor_plans_raw = item.get("floor_plans") or []
+    floor_plans = []
+    if isinstance(floor_plans_raw, list):
+        for fp in floor_plans_raw:
+            if isinstance(fp, dict) and fp.get("file"):
+                floor_plans.append({
+                    "id": str(fp.get("id") or fp.get("name") or uuid.uuid4()),
+                    "name": fp.get("name") or "Floor Plan",
+                    "file": fp.get("file"),
+                    "description": fp.get("description") or ""
+                })
+            elif isinstance(fp, str):
+                floor_plans.append({
+                    "id": fp,
+                    "name": "Floor Plan",
+                    "file": fp,
+                    "description": ""
+                })
+
+    # Try to find a typical unit layout image to display in the main floor_plan img view
+    layout_img = ""
+    typical_units = item.get("typical_units") or []
+    if isinstance(typical_units, list):
+        for tu in typical_units:
+            layouts = tu.get("layout") or []
+            if isinstance(layouts, list):
+                for lay in layouts:
+                    if isinstance(lay, dict):
+                        img_obj = lay.get("image")
+                        if isinstance(img_obj, dict) and img_obj.get("url"):
+                            layout_img = img_obj["url"]
+                            break
+                        elif isinstance(lay.get("url"), str):
+                            layout_img = lay["url"]
+                            break
+            if layout_img:
+                break
+    
+    if not layout_img and floor_plans:
+        layout_img = floor_plans[0]["file"]
 
     return {
         "id": project_id,
@@ -2147,18 +2334,20 @@ def _normalize_reelly_project(item: dict) -> dict:
         "hot": bool(item.get("is_partner_project") or item.get("hot")),
         "tagline": f"Premium {(item.get('property_type') or 'property').lower()} in {location}.",
         "hero": cover,
-        "gallery": gallery[:4],
+        "gallery": gallery_images[:10],
         "amenities": ["Swimming Pool", "Gymnasium", "Concierge", "Covered Parking"],
         "payment_plan": [
             {"milestone": "Booking", "percent": 10},
             {"milestone": "Construction", "percent": 50},
             {"milestone": "Handover", "percent": 40},
         ],
-        "floor_plan": "",
+        "floor_plan": layout_img,
+        "floor_plans": floor_plans,
         "map_image": "",
         "transactions": [],
         "description": f"{name} by {developer} in {location}, {city}. {item.get('has_escrow') and 'Escrow protected.' or ''} Handover {completion}.",
         "source": "reelly",
+        "brochure_url": brochure_url,
     }
 
 
@@ -2253,6 +2442,17 @@ async def update_team_settings(payload: TeamSettingsIn, _=Depends(require_develo
         await db_insert("settings", doc)
         return doc
     return await db_update("settings", "team", payload.model_dump())
+
+
+@api_router.put("/admin/settings/reviews")
+async def update_reviews_settings(payload: ReviewsSettingsIn, _=Depends(require_developer)):
+    s = await db_find_one("settings", {"id": "reviews"})
+    if not s:
+        doc = {"id": "reviews", **payload.model_dump()}
+        await db_insert("settings", doc)
+        return doc
+    updates = payload.model_dump()
+    return await db_update("settings", "reviews", updates)
 
 
 @api_router.post("/upload")
