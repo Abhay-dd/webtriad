@@ -64,5 +64,13 @@ services:
       - key: REELLY_API_KEY
         sync: false
 
+      # ── Cloudinary — persistent image/video storage ───────────────────────────
+      - key: CLOUDINARY_CLOUD_NAME
+        value: dhxttgpfj
+      - key: CLOUDINARY_API_KEY
+        value: "586595859119989"
+      - key: CLOUDINARY_API_SECRET
+        value: ZOv0THiwXmBw4KvhYoFdP3CeuEE
+
     # Health-check hits the /api/ root endpoint defined in server.py
     healthCheckPath: /api/
