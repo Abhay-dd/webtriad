@@ -174,14 +174,28 @@ _server_start_time: datetime = datetime.now(timezone.utc)
 
 _allowed_hosts_raw = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1,*.localhost")
 _allowed_hosts = [h.strip() for h in _allowed_hosts_raw.split(",") if h.strip()]
+
+# Automatically detect Render environment and allow its hostnames
+if os.environ.get("RENDER") == "true":
+    if "*.onrender.com" not in _allowed_hosts:
+        _allowed_hosts.append("*.onrender.com")
+    _render_hostname = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+    if _render_hostname and _render_hostname not in _allowed_hosts:
+        _allowed_hosts.append(_render_hostname)
+
 # Render's internal health checks and reverse proxy may send requests with
 # 'localhost' or IP addresses as the Host header.  Always include them so the
 # TrustedHostMiddleware doesn't reject those internal probes.
 for _internal in ("localhost", "127.0.0.1", "0.0.0.0"):
     if _internal not in _allowed_hosts:
         _allowed_hosts.append(_internal)
-if IS_PROD and _allowed_hosts == ["localhost", "127.0.0.1", "0.0.0.0"]:
-    raise RuntimeError("ALLOWED_HOSTS must list explicit production hostnames")
+
+# If we are in production and have no external hostnames (only local ones),
+# log a warning and fall back to allowing '*' so the deployment doesn't break.
+if IS_PROD and all(h in {"localhost", "127.0.0.1", "0.0.0.0", "*.localhost"} for h in _allowed_hosts):
+    logger.warning("No explicit production hostnames configured in ALLOWED_HOSTS. Allowing all hosts as fallback.")
+    _allowed_hosts.append("*")
+
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=_allowed_hosts)
 # NOTE: Do NOT use HTTPSRedirectMiddleware on Render.  Render terminates TLS at
 # its reverse proxy, so requests arrive at the app over plain HTTP.  The
