@@ -26,6 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from db import (
     USE_MONGO,
+    MONGO_URL,
     close_db,
     db_count,
     db_delete,
@@ -67,9 +68,9 @@ UPLOADS_DIR = Path(os.environ.get("UPLOADS_DIR", str(ROOT_DIR / "uploads"))).res
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── Cloudinary configuration (used for persistent image storage on Render) ──
-_CLOUDINARY_CLOUD_NAME = os.environ.get("CLOUDINARY_CLOUD_NAME", "")
-_CLOUDINARY_API_KEY = os.environ.get("CLOUDINARY_API_KEY", "")
-_CLOUDINARY_API_SECRET = os.environ.get("CLOUDINARY_API_SECRET", "")
+_CLOUDINARY_CLOUD_NAME = os.environ.get("CLOUDINARY_CLOUD_NAME", "dhxttgpfj")
+_CLOUDINARY_API_KEY = os.environ.get("CLOUDINARY_API_KEY", "586595859119989")
+_CLOUDINARY_API_SECRET = os.environ.get("CLOUDINARY_API_SECRET", "ZOv0THiwXmBw4KvhYoFdP3CeuEE")
 _USE_CLOUDINARY = bool(_CLOUDINARY_CLOUD_NAME and _CLOUDINARY_API_KEY and _CLOUDINARY_API_SECRET)
 if _USE_CLOUDINARY:
     cloudinary.config(
@@ -2099,7 +2100,8 @@ async def system_health(_=Depends(require_developer)):
         "jwt_secret_strong":  has_strong_jwt_secret(),
         "reelly_api_key_set": bool(REELLY_API_KEY),
         "database":           "mongodb" if USE_MONGO else "in-memory",
-        "mongo_uri_set":      bool(os.environ.get("MONGODB_URI")),
+        "mongo_uri_set":      bool(MONGO_URL),
+        "cloudinary_configured": _USE_CLOUDINARY,
         "sendgrid_key_set":   bool(os.environ.get("SENDGRID_API_KEY")),
     }
 

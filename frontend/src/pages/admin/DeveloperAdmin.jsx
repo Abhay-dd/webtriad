@@ -1799,6 +1799,7 @@ export default function DeveloperAdmin() {
                             { key: "jwt_secret_strong",  label: "JWT Secret — Strong key set", warn: "Weak or default JWT secret detected!" },
                             { key: "database",           label: `Database — ${health.checks.database}`, isText: true },
                             { key: "mongo_uri_set",      label: "MongoDB URI — configured", warn: "MONGODB_URI not set (using in-memory store)" },
+                            { key: "cloudinary_configured", label: "Cloudinary Config — configured", warn: "Cloudinary credentials not set (uploads will fall back to local disk and won't persist)" },
                             { key: "reelly_api_key_set", label: "Reelly API Key — configured", warn: "REELLY_API_KEY not set (property sync unavailable)" },
                             { key: "sendgrid_key_set",   label: "SendGrid API Key — configured", warn: "SENDGRID_API_KEY not set (email notifications disabled)" },
                           ].map(({ key, label, warn, isText }) => {

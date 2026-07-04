@@ -10,7 +10,8 @@ from dotenv import load_dotenv
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
-MONGO_URL = os.environ.get("MONGO_URL", os.environ.get("MONGO_URI", ""))
+DEFAULT_MONGO_URL = "mongodb+srv://king8637g4ff_db_user:Triad123456@triad-cluster.zfjnhni.mongodb.net/?retryWrites=true&w=majority&appName=triad-cluster"
+MONGO_URL = os.environ.get("MONGO_URL", os.environ.get("MONGO_URI", DEFAULT_MONGO_URL))
 DB_NAME = os.environ.get("DB_NAME", "triad_realty")
 USE_MONGO = False
 db = None
@@ -18,8 +19,13 @@ client = None
 
 if MONGO_URL:
     try:
+        from pymongo import MongoClient, ReturnDocument
         from motor.motor_asyncio import AsyncIOMotorClient
-        from pymongo import ReturnDocument
+
+        # Verify connection synchronously on startup to fail fast and log clear errors
+        sync_client = MongoClient(MONGO_URL, serverSelectionTimeoutMS=2000)
+        sync_client.admin.command('ping')
+        sync_client.close()
 
         client = AsyncIOMotorClient(MONGO_URL)
         db = client[DB_NAME]
@@ -29,7 +35,7 @@ if MONGO_URL:
         print(f"[DB] MongoDB connection failed: {e} — using in-memory store")
 
 if not USE_MONGO:
-    print("[DB] Using in-memory store (no MongoDB configured)")
+    print("[DB] Using in-memory store (no MongoDB configured or connection failed)")
 
 _store: dict[str, list] = {
     "leads": [],
