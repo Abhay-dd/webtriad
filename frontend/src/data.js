@@ -3,8 +3,8 @@ export const NAV = [
   { label: "Home", to: "/" },
   { label: "About Us", to: "/about" },
   { label: "Projects", to: "/projects" },
-  { label: "Reviews", to: "/reviews" },
-  { label: "Experience", to: "/gallery" },
+  // { label: "Reviews", to: "/reviews" },
+  // { label: "Experience", to: "/gallery" },
   { label: "Blogs", to: "/blogs" },
   { label: "Careers", to: "/careers" },
   { label: "Contact", to: "/contact" },
@@ -16,20 +16,20 @@ export const COMPANY = {
   phone: "+971 54 519 3393",
   whatsapp: "https://wa.me/971545193393?text=Hello%2C%20I%27m%20interested%20in%20a%20property%20consultation.",
   email: "info@triadrealityuae.com",
-  address: "Office 1204, Marina Plaza, Dubai Marina, Dubai, UAE",
+  address: "Office 1102, Al Shafar Tower 1, Barsha Heights , Dubai, UAE",
   instagram: "https://www.instagram.com/triadrealty.ae?igsh=MWZpd2pmeTZwMGhzcA==",
   linkedin: "https://www.linkedin.com/company/triadrealty-ae/",
 };
 
 export const MILESTONES = [
-  { year: "Q1 2025", label: "Founded in Dubai by three property consultants" },
-  { year: "Q2 2025", label: "First AED 25M+ in cumulative transactions" },
-  { year: "Q3 2025", label: "Expansion into Sharjah & the Northern Emirates" },
-  { year: "Q4 2025", label: "AED 200M+ in sales, 200+ investors served" },
-  { year: "Q1 2026", label: "Launched in-house market research desk" },
-  { year: "Q2 2026", label: "Recognised among the UAE's rising consultancies" },
+  { year: "Q2 2025", label: "Triad Realty Founded" },
+  { year: "Q3 2025", label: "Achieved AED 50M+ in Sales },
+  { year: "Q4 2025", label: "Expanded the Team to 30 Members" },
+  { year: "Q1 2026", label: "Launched Our In-House Market Research Desk Crossed AED 100M in Sales" },
+  { year: "Q2 2026", label: "Achieved AED 200M+ in sales Served 80+ Investors" },
+  { year: "Q3 2026", label: "Expended the Team to 53 Members" },
 ];
-
+ 
 export const FOUNDERS = [];
 
 export const TEAM = [];
@@ -200,7 +200,7 @@ export const GALLERY = [
 
 export const WHY_TRIAD = [
   { k: "AED 200M+", v: "In Closed Sales" },
-  { k: "200+", v: "Investors Served" },
+  { k: "80+", v: "Investors and end users" },
   { k: "4.9 / 5", v: "Client Rating" },
   { k: "2025", v: "Founded · Dubai" },
 ];

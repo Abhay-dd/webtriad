@@ -18,7 +18,7 @@ const TIER_LABELS = {
   "property-investment-consultant": "Property Investment Consultants",
   "none": "None / Unassigned",
 };
-const DEFAULT_TIER_ORDER = ["co-founder", "senior-portfolio-manager", "portfolio-manager", "property-investment-consultant"];
+const DEFAULT_TIER_ORDER = ["co-founder", "senior-portfolio-manager", "senior-portfolio-consultant", "property-investment-consultant"];
 
 export default function TeamList() {
   const [team, setTeam] = useState([]);
