@@ -667,6 +667,12 @@ async def set_user_password(user_id: str, password: str, extra_updates: Optional
 
 # ----------------------------- Startup seed -----------------------------
 async def seed_content():
+    # When MongoDB is connected, the real data has already been migrated there.
+    # Only seed sample data for development (in-memory store).
+    if USE_MONGO:
+        logger.info("MongoDB connected — skipping sample data seeding (real data already in Atlas)")
+        return
+
     if await db_count("projects") == 0:
         for p in PROJECTS:
             await db_insert("projects", dict(p))
