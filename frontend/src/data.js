@@ -23,7 +23,7 @@ export const COMPANY = {
 
 export const MILESTONES = [
   { year: "Q2 2025", label: "Triad Realty Founded" },
-  { year: "Q3 2025", label: "Achieved AED 50M+ in Sales },
+  { year: "Q3 2025", label: "Achieved AED 50M+ in Sales" },
   { year: "Q4 2025", label: "Expanded the Team to 30 Members" },
   { year: "Q1 2026", label: "Launched Our In-House Market Research Desk Crossed AED 100M in Sales" },
   { year: "Q2 2026", label: "Achieved AED 200M+ in sales Served 80+ Investors" },
