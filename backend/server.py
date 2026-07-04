@@ -174,11 +174,21 @@ _server_start_time: datetime = datetime.now(timezone.utc)
 
 _allowed_hosts_raw = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1,*.localhost")
 _allowed_hosts = [h.strip() for h in _allowed_hosts_raw.split(",") if h.strip()]
-if IS_PROD and ("*" in _allowed_hosts or not _allowed_hosts):
+# Render's internal health checks and reverse proxy may send requests with
+# 'localhost' or IP addresses as the Host header.  Always include them so the
+# TrustedHostMiddleware doesn't reject those internal probes.
+for _internal in ("localhost", "127.0.0.1", "0.0.0.0"):
+    if _internal not in _allowed_hosts:
+        _allowed_hosts.append(_internal)
+if IS_PROD and _allowed_hosts == ["localhost", "127.0.0.1", "0.0.0.0"]:
     raise RuntimeError("ALLOWED_HOSTS must list explicit production hostnames")
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=_allowed_hosts)
-if IS_PROD and os.environ.get("FORCE_HTTPS", "true").lower() == "true":
-    app.add_middleware(HTTPSRedirectMiddleware)
+# NOTE: Do NOT use HTTPSRedirectMiddleware on Render.  Render terminates TLS at
+# its reverse proxy, so requests arrive at the app over plain HTTP.  The
+# middleware would see HTTP and issue an infinite redirect loop.  Render itself
+# enforces HTTPS at the infrastructure level.
+# if IS_PROD and os.environ.get("FORCE_HTTPS", "true").lower() == "true":
+#     app.add_middleware(HTTPSRedirectMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RateLimitMiddleware)
 
