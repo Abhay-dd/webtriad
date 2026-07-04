@@ -58,7 +58,7 @@ services:
       - key: CORS_ORIGINS
         value: https://webtriad-9.onrender.com
       - key: ALLOWED_HOSTS
-        value: webtriad-9.onrender.com,*.onrender.com
+        value: webtriad-9.onrender.com,*.onrender.com,localhost,127.0.0.1
 
       # ── Optional: external Reelly listings API ────────────────────────────────
       - key: REELLY_API_KEY
