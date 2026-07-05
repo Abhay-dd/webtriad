@@ -104,7 +104,7 @@ export default function Home() {
             <div key={t.id || t.name} className="group" data-testid={`team-${t.name.toLowerCase().replace(/\s+/g, "-")}`}>
               <div className="aspect-[3/4] img-zoom bg-[var(--surface-dark,#141414)] relative">
                 {t.photo ? (
-                  <img src={resolveMediaUrl(t.photo)} alt={t.name} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700" />
+                  <img src={resolveMediaUrl(t.photo)} alt={t.name} style={{ objectFit: "cover", objectPosition: "50% 30%" }} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center bg-white/5 text-white">
                     <span className="font-display text-6xl text-[var(--gold)]">

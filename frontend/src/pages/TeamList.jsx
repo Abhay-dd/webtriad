@@ -42,7 +42,7 @@ export default function TeamList() {
       <Link to={`/team/${t.id}`} className="block group/link">
         <div className="aspect-[3/4] img-zoom bg-[var(--bg-alt)] relative">
           {t.photo ? (
-            <img src={resolveMediaUrl(t.photo)} alt={t.name} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700" />
+            <img src={resolveMediaUrl(t.photo)} alt={t.name} style={{ objectFit: "cover", objectPosition: "50% 30%" }} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700" />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-[var(--ink)] text-white">
               <span className="font-display text-6xl text-[var(--gold)]">

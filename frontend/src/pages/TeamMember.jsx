@@ -77,6 +77,7 @@ export default function TeamMember() {
                   <img
                     src={resolveMediaUrl(member.photo)}
                     alt={member.name}
+                    style={{ objectFit: "cover", objectPosition: "50% 30%" }}
                     className="w-full h-full object-cover"
                   />
                 ) : (

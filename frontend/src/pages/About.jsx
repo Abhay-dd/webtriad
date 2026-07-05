@@ -35,6 +35,30 @@ const extractYouTubeId = (url = "") => {
   return match?.[1] || "";
 };
 
+const makeAutoplayAndMute = (html) => {
+  if (!html) return html;
+  const srcRegex = /src="([^"]+)"/;
+  const match = html.match(srcRegex);
+  if (match && match[1]) {
+    let url = match[1];
+    if (url.includes("youtube.com") || url.includes("youtu.be")) {
+      if (url.includes("?")) {
+        if (!url.includes("autoplay=")) url += "&autoplay=1";
+        if (!url.includes("mute=")) url += "&mute=1";
+      } else {
+        url += "?autoplay=1&mute=1";
+      }
+      html = html.replace(srcRegex, `src="${url}"`);
+    }
+  }
+  if (!html.includes("allow=")) {
+    html = html.replace("<iframe", '<iframe allow="autoplay"');
+  } else if (!html.includes("autoplay")) {
+    html = html.replace(/allow="([^"]+)"/, 'allow="$1; autoplay"');
+  }
+  return html;
+};
+
 
 export default function About() {
   const [founders, setFounders] = useState([]);
@@ -98,7 +122,7 @@ export default function About() {
             <div key={f.id || f.name} className="group" data-testid={`founder-${(f.name || "").toLowerCase().replace(/\s+/g, "-")}`}>
               <div className="aspect-[3/4] img-zoom bg-[var(--surface-dark,#141414)] relative">
                 {f.photo ? (
-                  <img src={resolveMediaUrl(f.photo)} alt={f.name} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700" />
+                  <img src={resolveMediaUrl(f.photo)} alt={f.name} style={{ objectFit: "cover", objectPosition: "50% 30%" }} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center bg-white/5 text-white">
                     <span className="font-display text-6xl text-[var(--gold)]">
@@ -193,7 +217,7 @@ export default function About() {
             <div key={t.id || t.name} className="group" data-testid={`about-team-${(t.name || "").toLowerCase().replace(/\s+/g, "-")}`}>
               <div className="aspect-[3/4] img-zoom bg-[var(--surface-dark,#141414)] relative">
                 {t.photo ? (
-                  <img src={resolveMediaUrl(t.photo)} alt={t.name} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700" />
+                  <img src={resolveMediaUrl(t.photo)} alt={t.name} style={{ objectFit: "cover", objectPosition: "50% 30%" }} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center bg-white/5 text-white">
                     <span className="font-display text-6xl text-[var(--gold)]">
@@ -325,6 +349,44 @@ export default function About() {
 
 
 
+      {/* LATEST LAUNCH UPDATES (moved here) */}
+      <section className="section-pad bg-white latest-launch-updates" data-testid="about-launch-updates">
+        <div className="container-x">
+          <div className="text-center max-w-5xl mx-auto mb-12" data-reveal>
+            <div className="overline text-[var(--gold-deep)]">Latest Launch Updates</div>
+            <h2 className="font-display text-4xl md:text-6xl mt-5 leading-none">{homepageSettings.launch_title}</h2>
+            <p className="text-lg leading-relaxed text-[var(--ink-2)] mt-6">
+              {homepageSettings.launch_description}
+            </p>
+          </div>
+
+          <div className="max-w-4xl mx-auto" data-reveal>
+            <div className="aspect-video bg-[var(--ink)] relative overflow-hidden shadow-2xl shadow-black/10">
+              {homepageSettings.launch_video_url && homepageSettings.launch_video_url.includes("<iframe") ? (
+                <div 
+                  className="absolute inset-0 w-full h-full [&_iframe]:w-full [&_iframe]:h-full [&_iframe]:absolute [&_iframe]:inset-0" 
+                  dangerouslySetInnerHTML={{ __html: makeAutoplayAndMute(homepageSettings.launch_video_url) }} 
+                />
+              ) : youtubeId ? (
+                <iframe
+                  src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&mute=1`}
+                  title="Latest launch update video"
+                  className="absolute inset-0 w-full h-full"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                />
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center bg-[var(--ink)]">
+                  <div className="w-20 h-20 border border-[var(--gold)] text-[var(--gold)] flex items-center justify-center">
+                    <Play size={30} fill="currentColor" />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className="section-pad bg-white" data-testid="about-journey">
         <div className="container-x">
           <div className="overline text-[var(--gold-deep)]">Our Journey</div>
@@ -343,51 +405,6 @@ export default function About() {
 
       {renderFounders()}
       {renderTeam()}
-
-      {/* LATEST LAUNCH UPDATES */}
-      <section className="section-pad bg-white latest-launch-updates" data-testid="about-launch-updates">
-        <div className="container-x">
-          <div className="text-center max-w-5xl mx-auto mb-12" data-reveal>
-            <div className="overline text-[var(--gold-deep)]">Latest Launch Updates</div>
-            <h2 className="font-display text-4xl md:text-6xl mt-5 leading-none">{homepageSettings.launch_title}</h2>
-            <p className="text-lg leading-relaxed text-[var(--ink-2)] mt-6">
-              {homepageSettings.launch_description}
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
-            <div className="lg:col-span-5 grid grid-cols-1 sm:grid-cols-2 gap-5" data-reveal>
-              {launchStats.map(({ value, label, icon: Icon }) => (
-                <div key={`${value}-${label}`} className="bg-[var(--bg-alt)] border border-[var(--line)] p-7 text-center min-h-[190px] flex flex-col justify-center">
-                  <Icon size={48} strokeWidth={1.4} className="mx-auto text-[var(--ink)]" />
-                  <div className="font-display text-3xl mt-5 tabular">{value}</div>
-                  <div className="text-sm text-[var(--muted)] mt-2">{label}</div>
-                </div>
-              ))}
-            </div>
-
-            <div className="lg:col-span-7" data-reveal>
-              <div className="aspect-video bg-[var(--ink)] relative overflow-hidden shadow-2xl shadow-black/10">
-                {youtubeId ? (
-                  <iframe
-                    src={`https://www.youtube.com/embed/${youtubeId}`}
-                    title="Latest launch update video"
-                    className="absolute inset-0 w-full h-full"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                    allowFullScreen
-                  />
-                ) : (
-                  <div className="absolute inset-0 flex items-center justify-center bg-[var(--ink)]">
-                    <div className="w-20 h-20 border border-[var(--gold)] text-[var(--gold)] flex items-center justify-center">
-                      <Play size={30} fill="currentColor" />
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
     </>
   );
 }

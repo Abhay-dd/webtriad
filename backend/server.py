@@ -719,100 +719,8 @@ async def seed_content():
         for b in BLOGS:
             await db_insert("blogs", dict(b))
         logger.info("Seeded %d blogs", len(BLOGS))
-    if await db_count("team") == 0:
-        default_team = [
-            {
-                "id": "karan-mehta",
-                "name": "Karan Mehta",
-                "role": "Co-Founder · Managing Director",
-                "photo": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?crop=entropy&cs=srgb&fm=jpg&w=900&q=85",
-                "bio": "Sixteen years across Dubai's primary and resale markets. Karan leads the firm's developer relationships and high-net-worth advisory.",
-                "phone": "+971 54 519 3393",
-                "email": "owner@triad.ae",
-                "instagram": "https://instagram.com/triadrealty",
-                "linkedin": "https://linkedin.com/in/triadrealty",
-                "isFounder": True,
-            },
-            {
-                "id": "ayesha-khan",
-                "name": "Ayesha Khan",
-                "role": "Co-Founder · Head of Investments",
-                "photo": "https://images.unsplash.com/photo-1494790108755-2616c5e38615?crop=entropy&cs=srgb&fm=jpg&w=900&q=85",
-                "bio": "Former equities analyst turned property strategist. Ayesha runs the analytics desk and authors our quarterly market reports.",
-                "phone": "+971 54 519 3393",
-                "email": "ayesha@triadrealty.ae",
-                "instagram": "https://instagram.com/triadrealty",
-                "linkedin": "https://linkedin.com/in/triadrealty",
-                "isFounder": True,
-            },
-            {
-                "id": "rohan-verma",
-                "name": "Rohan Verma",
-                "role": "Co-Founder · Brand & Experience",
-                "photo": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?crop=entropy&cs=srgb&fm=jpg&w=900&q=85",
-                "bio": "Builds the Triad experience — from first call to handover. Believes property consultancy is, fundamentally, a craft.",
-                "phone": "+971 54 519 3393",
-                "email": "rohan@triadrealty.ae",
-                "instagram": "https://instagram.com/triadrealty",
-                "linkedin": "https://linkedin.com/in/triadrealty",
-                "isFounder": True,
-            },
-            {
-                "id": "sarah-al-rashid",
-                "name": "Sarah Al-Rashid",
-                "role": "Senior Investment Consultant",
-                "experience": "4+ years",
-                "speaks": "English, Arabic",
-                "photo": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?crop=entropy&cs=srgb&fm=jpg&w=800&q=85",
-                "phone": "+971 54 519 3393",
-                "email": "sarah@triadrealty.ae",
-                "instagram": "https://instagram.com/triadrealty",
-                "linkedin": "https://linkedin.com/in/triadrealty",
-                "isFounder": False,
-            },
-            {
-                "id": "ahmed-hassan",
-                "name": "Ahmed Hassan",
-                "role": "Investment Consultant",
-                "experience": "3+ years",
-                "speaks": "English, Urdu",
-                "photo": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?crop=entropy&cs=srgb&fm=jpg&w=800&q=85",
-                "phone": "+971 54 519 3393",
-                "email": "ahmed@triadrealty.ae",
-                "instagram": "https://instagram.com/triadrealty",
-                "linkedin": "https://linkedin.com/in/triadrealty",
-                "isFounder": False,
-            },
-            {
-                "id": "fatima-al-zahra",
-                "name": "Fatima Al-Zahra",
-                "role": "Consultant — Family Living",
-                "experience": "4+ years",
-                "speaks": "English, Arabic",
-                "photo": "https://images.unsplash.com/photo-1580489944761-15a19d654956?crop=entropy&cs=srgb&fm=jpg&w=800&q=85",
-                "phone": "+971 54 519 3393",
-                "email": "fatima@triadrealty.ae",
-                "instagram": "https://instagram.com/triadrealty",
-                "linkedin": "https://linkedin.com/in/triadrealty",
-                "isFounder": False,
-            },
-            {
-                "id": "james-mitchell",
-                "name": "James Mitchell",
-                "role": "Consultant — International Desk",
-                "experience": "5+ years",
-                "speaks": "English, French",
-                "photo": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?crop=entropy&cs=srgb&fm=jpg&w=800&q=85",
-                "phone": "+971 54 519 3393",
-                "email": "james@triadrealty.ae",
-                "instagram": "https://instagram.com/triadrealty",
-                "linkedin": "https://linkedin.com/in/triadrealty",
-                "isFounder": False,
-            },
-        ]
-        for member in default_team:
-            await db_insert("team", member)
-        logger.info("Seeded %d default team members and founders", len(default_team))
+    # Default team seeding deleted per requirements
+    pass
     if not await db_find_one("settings", {"id": "launch_popup"}):
         await db_insert("settings", {
             "id": "launch_popup",
@@ -1884,13 +1792,13 @@ async def list_experience():
 
 # ----------------------------- Admin CMS: projects & blogs (developer) -----------------------------
 @api_router.get("/admin/projects")
-async def admin_list_projects(_=Depends(require_developer)):
+async def admin_list_projects(_=Depends(require_owner_or_developer)):
     items = await db_find("projects")
     return {"count": len(items), "results": items}
 
 
 @api_router.post("/admin/projects")
-async def admin_create_project(payload: ProjectIn, _=Depends(require_developer)):
+async def admin_create_project(payload: ProjectIn, _=Depends(require_owner_or_developer)):
     doc = payload.model_dump(exclude_none=True)
     if not doc.get("id"):
         doc["id"] = str(uuid.uuid4())
@@ -1899,7 +1807,7 @@ async def admin_create_project(payload: ProjectIn, _=Depends(require_developer))
 
 
 @api_router.patch("/admin/projects/{project_id}")
-async def admin_update_project(project_id: str, payload: ProjectIn, _=Depends(require_developer)):
+async def admin_update_project(project_id: str, payload: ProjectIn, _=Depends(require_owner_or_developer)):
     p = await db_find_one("projects", {"id": project_id})
     if not p:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -1909,19 +1817,19 @@ async def admin_update_project(project_id: str, payload: ProjectIn, _=Depends(re
 
 
 @api_router.delete("/admin/projects/{project_id}")
-async def admin_delete_project(project_id: str, _=Depends(require_developer)):
+async def admin_delete_project(project_id: str, _=Depends(require_owner_or_developer)):
     await db_delete("projects", project_id)
     return {"detail": "Deleted"}
 
 
 @api_router.get("/admin/blogs")
-async def admin_list_blogs(_=Depends(require_developer)):
+async def admin_list_blogs(_=Depends(require_owner_or_developer)):
     items = await db_find("blogs")
     return {"count": len(items), "results": items}
 
 
 @api_router.post("/admin/blogs")
-async def admin_create_blog(payload: BlogIn, _=Depends(require_developer)):
+async def admin_create_blog(payload: BlogIn, _=Depends(require_owner_or_developer)):
     doc = payload.model_dump(exclude_none=True)
     if not doc.get("id"):
         doc["id"] = str(uuid.uuid4())
@@ -1930,7 +1838,7 @@ async def admin_create_blog(payload: BlogIn, _=Depends(require_developer)):
 
 
 @api_router.patch("/admin/blogs/{blog_id}")
-async def admin_update_blog(blog_id: str, payload: BlogIn, _=Depends(require_developer)):
+async def admin_update_blog(blog_id: str, payload: BlogIn, _=Depends(require_owner_or_developer)):
     b = await db_find_one("blogs", {"id": blog_id})
     if not b:
         raise HTTPException(status_code=404, detail="Blog not found")
@@ -1940,14 +1848,14 @@ async def admin_update_blog(blog_id: str, payload: BlogIn, _=Depends(require_dev
 
 
 @api_router.delete("/admin/blogs/{blog_id}")
-async def admin_delete_blog(blog_id: str, _=Depends(require_developer)):
+async def admin_delete_blog(blog_id: str, _=Depends(require_owner_or_developer)):
     await db_delete("blogs", blog_id)
     return {"detail": "Deleted"}
 
 
 # ----------------------------- Admin CMS: Reviews (developer) -----------------------------
 @api_router.post("/admin/reviews")
-async def admin_create_review(payload: ReviewIn, _=Depends(require_developer)):
+async def admin_create_review(payload: ReviewIn, _=Depends(require_owner_or_developer)):
     doc = payload.model_dump(exclude_none=True)
     if not doc.get("id"):
         doc["id"] = str(uuid.uuid4())
@@ -1969,7 +1877,7 @@ async def admin_create_review(payload: ReviewIn, _=Depends(require_developer)):
 
 
 @api_router.patch("/admin/reviews/{review_id}")
-async def admin_update_review(review_id: str, payload: ReviewIn, _=Depends(require_developer)):
+async def admin_update_review(review_id: str, payload: ReviewIn, _=Depends(require_owner_or_developer)):
     r = await db_find_one("reviews", {"id": review_id})
     if not r:
         raise HTTPException(status_code=404, detail="Review not found")
@@ -1991,7 +1899,7 @@ async def admin_update_review(review_id: str, payload: ReviewIn, _=Depends(requi
 
 
 @api_router.delete("/admin/reviews/{review_id}")
-async def admin_delete_review(review_id: str, _=Depends(require_developer)):
+async def admin_delete_review(review_id: str, _=Depends(require_owner_or_developer)):
     await db_delete("reviews", review_id)
     return {"detail": "Deleted"}
 
@@ -2079,7 +1987,7 @@ async def admin_delete_experience(experience_id: str, user=Depends(require_owner
 
 
 @api_router.get("/admin/system/health")
-async def system_health(_=Depends(require_developer)):
+async def system_health(_=Depends(require_owner_or_developer)):
     now = datetime.now(timezone.utc)
     uptime_seconds = int((now - _server_start_time).total_seconds())
     uptime_hours   = uptime_seconds // 3600
@@ -2164,14 +2072,14 @@ async def get_team_member(member_id: str):
 
 
 @api_router.post("/team")
-async def create_team_member(payload: TeamMemberIn, _=Depends(require_developer)):
+async def create_team_member(payload: TeamMemberIn, _=Depends(require_owner_or_developer)):
     member = TeamMemberOut(**payload.model_dump())
     await db_insert("team", member.model_dump())
     return member
 
 
 @api_router.put("/team/{member_id}")
-async def update_team_member(member_id: str, payload: TeamMemberIn, _=Depends(require_developer)):
+async def update_team_member(member_id: str, payload: TeamMemberIn, _=Depends(require_owner_or_developer)):
     updated = await db_update("team", member_id, payload.model_dump())
     if not updated:
         raise HTTPException(status_code=404, detail="Team member not found")
@@ -2179,7 +2087,7 @@ async def update_team_member(member_id: str, payload: TeamMemberIn, _=Depends(re
 
 
 @api_router.delete("/team/{member_id}")
-async def delete_team_member(member_id: str, _=Depends(require_developer)):
+async def delete_team_member(member_id: str, _=Depends(require_owner_or_developer)):
     await db_delete("team", member_id)
     return {"detail": "Deleted"}
 
@@ -2441,7 +2349,7 @@ async def preview_external_projects(page: int = 1, per_page: int = 10, _=Depends
 
 
 @api_router.put("/admin/settings/popup")
-async def update_popup_settings(payload: PopupSettingsIn, _=Depends(require_developer)):
+async def update_popup_settings(payload: PopupSettingsIn, _=Depends(require_owner_or_developer)):
     s = await db_find_one("settings", {"id": "launch_popup"})
     if not s:
         doc = {"id": "launch_popup", **payload.model_dump()}
@@ -2452,7 +2360,7 @@ async def update_popup_settings(payload: PopupSettingsIn, _=Depends(require_deve
 
 
 @api_router.put("/admin/settings/homepage")
-async def update_homepage_settings(payload: HomepageSettingsIn, _=Depends(require_developer)):
+async def update_homepage_settings(payload: HomepageSettingsIn, _=Depends(require_owner_or_developer)):
     s = await db_find_one("settings", {"id": "homepage"})
     if not s:
         doc = {"id": "homepage", **payload.model_dump()}
@@ -2463,7 +2371,7 @@ async def update_homepage_settings(payload: HomepageSettingsIn, _=Depends(requir
 
 
 @api_router.put("/admin/settings/team")
-async def update_team_settings(payload: TeamSettingsIn, _=Depends(require_developer)):
+async def update_team_settings(payload: TeamSettingsIn, _=Depends(require_owner_or_developer)):
     # Validate tier order contains only known tiers
     for t in payload.tier_order:
         if t not in TEAM_TIERS:
@@ -2477,7 +2385,7 @@ async def update_team_settings(payload: TeamSettingsIn, _=Depends(require_develo
 
 
 @api_router.put("/admin/settings/reviews")
-async def update_reviews_settings(payload: ReviewsSettingsIn, _=Depends(require_developer)):
+async def update_reviews_settings(payload: ReviewsSettingsIn, _=Depends(require_owner_or_developer)):
     s = await db_find_one("settings", {"id": "reviews"})
     if not s:
         doc = {"id": "reviews", **payload.model_dump()}

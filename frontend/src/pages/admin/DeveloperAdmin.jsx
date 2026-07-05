@@ -1248,10 +1248,11 @@ export default function DeveloperAdmin() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-xs uppercase tracking-widest text-[var(--muted)] mb-2">YouTube Video URL</label>
-                    <input
-                      placeholder="https://www.youtube.com/watch?v=..."
-                      className="input-line w-full"
+                    <label className="block text-xs uppercase tracking-widest text-[var(--muted)] mb-2">YouTube Video Embed Code / URL</label>
+                    <textarea
+                      placeholder='Paste YouTube Embed iframe code (e.g. <iframe ...></iframe>) or Video URL'
+                      className="w-full border border-[var(--line)] p-3 text-sm focus:outline-none focus:border-[var(--gold)]"
+                      rows={3}
                       value={homepageForm.launch_video_url}
                       onChange={(e) => setHomepageForm({ ...homepageForm, launch_video_url: e.target.value })}
                     />
@@ -1266,27 +1267,6 @@ export default function DeveloperAdmin() {
                     />
                     <FileUploadButton onUploadSuccess={(url) => setHomepageForm({ ...homepageForm, founders_image_url: url })} label="Upload Founders Image" />
                   </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {[1, 2, 3, 4].map((n) => (
-                    <div key={n} className="border border-[var(--line)] p-5">
-                      <p className="overline text-[var(--muted)] mb-3">Detail {n}</p>
-                      <input
-                        placeholder="Value"
-                        required
-                        className="input-line w-full"
-                        value={homepageForm[`stat${n}_value`]}
-                        onChange={(e) => setHomepageForm({ ...homepageForm, [`stat${n}_value`]: e.target.value })}
-                      />
-                      <input
-                        placeholder="Label"
-                        required
-                        className="input-line w-full mt-3"
-                        value={homepageForm[`stat${n}_label`]}
-                        onChange={(e) => setHomepageForm({ ...homepageForm, [`stat${n}_label`]: e.target.value })}
-                      />
-                    </div>
-                  ))}
                 </div>
                 <button type="submit" disabled={saving} className="btn-gold w-full !py-3">
                   {saving ? "Saving..." : "Save Homepage Settings"}

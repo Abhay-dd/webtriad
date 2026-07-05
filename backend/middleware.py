@@ -65,7 +65,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "img-src 'self' data: blob: https:; "
             "connect-src 'self'; "
             "media-src 'self' blob:; "
-            "frame-src https://www.youtube-nocookie.com https://www.google.com; "
+            "frame-src https://www.youtube-nocookie.com https://www.youtube.com https://youtube.com https://www.google.com; "
             "frame-ancestors 'none';"
         )
         return response
