@@ -59,13 +59,23 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # - frame-ancestors 'none': equivalent to X-Frame-Options DENY
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline'; "
+            "script-src 'self' 'unsafe-inline' https://us-assets.i.posthog.com; "
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
             "font-src 'self' https://fonts.gstatic.com data:; "
             "img-src 'self' data: blob: https:; "
-            "connect-src 'self'; "
-            "media-src 'self' blob:; "
+            "connect-src 'self' https://us.i.posthog.com https://us-assets.i.posthog.com; "
+            "media-src 'self' blob: https://res.cloudinary.com; "
             "frame-src https://www.youtube-nocookie.com https://www.youtube.com https://youtube.com https://www.google.com; "
+            "worker-src 'self' blob:; "
             "frame-ancestors 'none';"
         )
+        # Cache-Control headers policy based on resource type
+        path = request.url.path
+        if path.startswith("/api/") or path.startswith("/api"):
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        elif "/static/" in path or path.endswith((".js", ".css", ".png", ".jpg", ".jpeg", ".webp", ".svg", ".ico", ".woff", ".woff2", ".ttf")):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        else:
+            response.headers["Cache-Control"] = "no-cache, must-revalidate"
+
         return response

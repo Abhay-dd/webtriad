@@ -2,8 +2,9 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Phone, Mail, Instagram, Linkedin, Facebook, ArrowUpRight } from "lucide-react";
 import axios from "axios";
-
-import { API_URL as API, resolveMediaUrl } from "../config";
+import { API_URL as API, resolveMediaUrl, SITE_URL } from "../config";
+import { Helmet } from "react-helmet-async";
+import Breadcrumbs from "../components/Breadcrumbs";
 
 function toWhatsApp(phone) {
   if (!phone) return "";
@@ -42,7 +43,15 @@ export default function TeamList() {
       <Link to={`/team/${t.id}`} className="block group/link">
         <div className="aspect-[3/4] img-zoom bg-[var(--bg-alt)] relative">
           {t.photo ? (
-            <img src={resolveMediaUrl(t.photo)} alt={t.name} style={{ objectFit: "cover", objectPosition: "50% 30%" }} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700" />
+            <img 
+              src={resolveMediaUrl(t.photo)} 
+              alt={`Consultant ${t.name}`} 
+              width={300}
+              height={400}
+              loading="lazy"
+              style={{ objectFit: "cover", objectPosition: "50% 30%" }} 
+              className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700" 
+            />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-[var(--ink)] text-white">
               <span className="font-display text-6xl text-[var(--gold)]">
@@ -126,12 +135,38 @@ export default function TeamList() {
       .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
   }
 
+  const canonicalUrl = `${SITE_URL}/team`;
+  const teamSchema = {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "Triad Realty Advisors and Consultants",
+    "url": canonicalUrl,
+    "description": "Meet our specialized team of property consultants, co-founders, and senior portfolio managers."
+  };
+
   return (
     <>
+      <Helmet>
+        <title>Advisory Panel & Property Consultants | Triad Realty</title>
+        <meta name="description" content="Meet our specialized team of Dubai property consultants, co-founders, and portfolio managers guiding your acquisitions across the UAE." />
+        <link rel="canonical" href={canonicalUrl} />
+        <meta property="og:title" content="Advisory Panel & Property Consultants | Triad Realty" />
+        <meta property="og:description" content="Meet our specialized team of Dubai property consultants, co-founders, and portfolio managers." />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content={canonicalUrl} />
+        <meta property="og:image" content={`${SITE_URL}/og-image.jpg`} />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:image" content={`${SITE_URL}/twitter-image.jpg`} />
+        <script type="application/ld+json">{JSON.stringify(teamSchema)}</script>
+      </Helmet>
+
       <section className="relative h-[45vh] min-h-[350px] w-full overflow-hidden bg-neutral-950 flex items-end pb-12 border-b border-white/10" data-testid="team-hero">
         <img
-          src="/background.png"
+          src="https://res.cloudinary.com/dhxttgpfj/image/upload/v1783444297/background_fualmf.png"
           alt="Triad Realty Team Banner"
+          width={1920}
+          height={600}
+          loading="lazy"
           className="absolute inset-0 w-full h-full object-cover opacity-45"
         />
         {/* Gradient overlay for contrast and premium feel */}
@@ -139,6 +174,7 @@ export default function TeamList() {
         
         <div className="container-x relative px-5 lg:px-12 z-[3] w-full">
           <div className="max-w-3xl">
+            <Breadcrumbs items={[{ label: "Team", url: "/team" }]} />
             <div className="overline text-[var(--gold)] tracking-[0.25em] text-xs">Advisory Panel</div>
             <h1 className="font-display text-4xl md:text-5xl mt-3 tracking-tight leading-tight text-white">
               Our Consultants

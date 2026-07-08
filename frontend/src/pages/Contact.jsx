@@ -16,9 +16,10 @@ import {
   ChevronLeft,
   ChevronRight
 } from "lucide-react";
-
-import { API_URL as API } from "../config";
+import { API_URL as API, SITE_URL } from "../config";
 import { DIAL_CODES, validatePhone, formatPhoneAsYouType } from "../utils/phoneValidation";
+import { Helmet } from "react-helmet-async";
+import Breadcrumbs from "../components/Breadcrumbs";
 
 // ─── Available time slots ──────────────────────────────────────────────────────
 const TIME_SLOTS = [
@@ -311,10 +312,41 @@ export default function Contact() {
 
   const header = getHeaderInfo();
 
+  const canonicalUrl = `${SITE_URL}/contact`;
+  const contactPointSchema = {
+    "@context": "https://schema.org",
+    "@type": "ContactPage",
+    "name": "Contact Triad Realty Dubai",
+    "url": canonicalUrl,
+    "description": "Book a consultation, request brochures or floor plans, and speak to our property advisors.",
+    "mainEntity": {
+      "@type": "ContactPoint",
+      "telephone": contact.phone,
+      "contactType": "customer service",
+      "areaServed": "AE",
+      "availableLanguage": ["English", "Arabic", "Russian"]
+    }
+  };
+
   return (
     <>
+      <Helmet>
+        <title>Contact & Advisory Booking | Triad Realty</title>
+        <meta name="description" content="Reach out to Triad Realty Dubai. Book a luxury off-plan consultation, request brochures/floor plans, or connect with our investment desks directly." />
+        <link rel="canonical" href={canonicalUrl} />
+        <meta property="og:title" content="Contact & Advisory Booking | Triad Realty" />
+        <meta property="og:description" content="Book a luxury off-plan consultation, request brochures/floor plans, or connect with our investment desks." />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content={canonicalUrl} />
+        <meta property="og:image" content={`${SITE_URL}/og-image.jpg`} />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:image" content={`${SITE_URL}/twitter-image.jpg`} />
+        <script type="application/ld+json">{JSON.stringify(contactPointSchema)}</script>
+      </Helmet>
+
       <section className="pt-40 pb-12 section-pad bg-white" data-testid="contact-hero">
         <div className="container-x">
+          <Breadcrumbs items={[{ label: "Contact", url: "/contact" }]} />
           <div className="overline text-[var(--gold-deep)]">{header.overline}</div>
           <h1 className="font-display text-5xl md:text-7xl mt-6 leading-[0.95]">
             {header.title}

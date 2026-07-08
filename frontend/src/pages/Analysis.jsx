@@ -5,8 +5,9 @@ import { MARKET_KPIS, QUARTERS, COMMUNITIES } from "../data";
 import { ArrowLeftRight, X } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import BrochureModal from "../components/BrochureModal";
-
-import { API_URL as API } from "../config";
+import { API_URL as API, SITE_URL } from "../config";
+import { Helmet } from "react-helmet-async";
+import Breadcrumbs from "../components/Breadcrumbs";
 import { reallyApi } from "../services/api/realEstateApi";
 import { sortAlphabetically } from "../utils/propertyFilters";
 
@@ -181,10 +182,23 @@ export default function Analysis() {
   const periodStart = getPeriodStart(period);
   const now = new Date();
 
+  const canonicalUrl = `${SITE_URL}/analysis`;
+
   return (
     <>
+      <Helmet>
+        <title>UAE Real Estate Comparative Analysis | Triad Realty</title>
+        <meta name="description" content="Compare UAE luxury property developments side-by-side. Analyze pricing, configurations, handover schedules, and sales velocity data." />
+        <link rel="canonical" href={canonicalUrl} />
+        <meta property="og:title" content="UAE Real Estate Comparative Analysis | Triad Realty" />
+        <meta property="og:description" content="Compare UAE luxury property developments side-by-side." />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content={canonicalUrl} />
+      </Helmet>
+
       <section className="pt-40 pb-12 section-pad bg-white" data-testid="analysis-hero">
         <div className="container-x">
+          <Breadcrumbs items={[{ label: "Analysis", url: "/analysis" }]} />
           <div className="overline text-[var(--gold-deep)]">Comparative Analysis</div>
           <h1 className="font-display text-5xl md:text-7xl mt-6 leading-[0.95]">
             Sales performance summary comparison

@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
 import { Search, ArrowUpRight, Flame, ChevronLeft, ChevronRight, Wallet, Calendar } from "lucide-react";
-import { API_URL as API, resolveMediaUrl } from "../config";
+import { API_URL as API, resolveMediaUrl, SITE_URL } from "../config";
 import { buildFilterOptions, filterProperties, normalizeProperties } from "../utils/propertyFilters";
+import { Helmet } from "react-helmet-async";
+import Breadcrumbs from "../components/Breadcrumbs";
 import { useAuth } from "../context/AuthContext";
 import BrochureModal from "../components/BrochureModal";
 
@@ -178,8 +180,33 @@ export default function Projects() {
     return "80/20";
   };
 
+  const canonicalUrl = `${SITE_URL}/projects`;
+  const projectsSchema = {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "Luxury UAE Off-Plan & Resale Projects | Triad Realty",
+    "url": canonicalUrl,
+    "description": "Explore the most anticipated off-plan developments and luxury resale projects in Dubai, Abu Dhabi, and the Northern Emirates."
+  };
+
   return (
     <>
+      <Helmet>
+        <title>Luxury UAE Off-Plan & Resale Projects | Triad Realty</title>
+        <meta name="description" content="Explore premier off-plan real estate launches and premium resale properties in Dubai, Abu Dhabi, and Sharjah. Comprehensive developer listings." />
+        <link rel="canonical" href={canonicalUrl} />
+        <meta property="og:title" content="Luxury UAE Off-Plan & Resale Projects | Triad Realty" />
+        <meta property="og:description" content="Explore premier off-plan real estate launches and premium resale properties in Dubai, Abu Dhabi, and Sharjah." />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content={canonicalUrl} />
+        <meta property="og:image" content={`${SITE_URL}/og-image.jpg`} />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:image" content={`${SITE_URL}/twitter-image.jpg`} />
+        <script type="application/ld+json">{JSON.stringify(projectsSchema)}</script>
+      </Helmet>
+
+      <h1 className="sr-only">Triad Realty Luxury UAE Off-Plan and Resale Listings</h1>
+
       {/* Slider / Carousel Hero */}
       <section 
         className="relative h-[65vh] md:h-[75vh] w-full overflow-hidden bg-neutral-950 pt-20" 
@@ -207,7 +234,10 @@ export default function Projects() {
                   {/* Background Image */}
                   <img
                     src={resolveMediaUrl(p.image)}
-                    alt={p.title}
+                    alt={`Curated Launch: ${p.title} by ${p.developer}`}
+                    width={1920}
+                    height={800}
+                    loading="eager"
                     className="absolute inset-0 w-full h-full object-cover"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 to-black/60" />
@@ -216,16 +246,12 @@ export default function Projects() {
                   <div className="absolute inset-0 flex flex-col justify-end pb-12 md:pb-16 px-5 lg:px-12 text-white">
                     <div className="container mx-auto max-w-7xl">
                       {/* Breadcrumbs */}
-                      <div className="text-white/60 text-xs mb-3 flex items-center gap-2">
-                        <Link to="/" className="hover:text-white transition-colors">Home</Link>
-                        <span>/</span>
-                        <span className="text-white">Projects</span>
-                      </div>
+                      <Breadcrumbs items={[{ label: "Projects", url: "/projects" }]} />
                       
                       {/* Title */}
-                      <h1 className="font-display text-3xl md:text-5xl lg:text-6xl font-bold tracking-tight text-white mb-6 max-w-3xl leading-[1.1]">
+                      <h2 className="font-display text-3xl md:text-5xl lg:text-6xl font-bold tracking-tight text-white mb-6 max-w-3xl leading-[1.1]">
                         {p.title}
-                      </h1>
+                      </h2>
                       
                       {/* Quick Specs */}
                       <div className="flex flex-wrap gap-6 items-center mb-8 text-white">
@@ -416,7 +442,14 @@ export default function Projects() {
                   data-testid={`project-card-${p.id}`}
                 >
                   <div className="aspect-[4/3] img-zoom relative overflow-hidden">
-                    <img src={resolveMediaUrl(p.image)} alt={p.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                    <img 
+                      src={resolveMediaUrl(p.image)} 
+                      alt={`${p.title} project by ${p.developer} in ${p.location}`} 
+                      width={400}
+                      height={300}
+                      loading="lazy"
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
+                    />
                     {p.isFeatured && (
                       <div className="absolute top-4 left-4 bg-[var(--ink)] text-[var(--gold)] overline px-3 py-1 text-[10px] tracking-wider uppercase font-semibold z-10">
                         Featured

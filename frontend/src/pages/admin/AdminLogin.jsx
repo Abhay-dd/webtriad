@@ -63,7 +63,7 @@ export default function AdminLogin() {
             {/* Logo */}
             <div className="flex items-center gap-3 mb-8">
               <img
-                src="/triad_logo.jpeg"
+                src="https://res.cloudinary.com/dhxttgpfj/image/upload/v1783444277/logo_ciuljv.png"
                 alt="Triad Realty"
                 className="h-12 w-auto object-contain flex-shrink-0"
               />

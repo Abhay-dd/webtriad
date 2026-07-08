@@ -2,8 +2,9 @@ import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Phone, Mail, Instagram, Linkedin, Facebook, ArrowLeft, Youtube } from "lucide-react";
 import axios from "axios";
-
-import { API_URL as API, resolveMediaUrl } from "../config";
+import { API_URL as API, resolveMediaUrl, SITE_URL } from "../config";
+import { Helmet } from "react-helmet-async";
+import Breadcrumbs from "../components/Breadcrumbs";
 
 function toWhatsApp(phone) {
   if (!phone) return "";
@@ -57,17 +58,75 @@ export default function TeamMember() {
   const ytId2 = extractYtId(member.videoUrl2);
   const hasVideos = member.videoUrl || member.videoUrl2;
 
+  const canonicalUrl = `${SITE_URL}/team/${id}`;
+  
+  // Person structured data
+  const personSchema = member ? {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    "name": member.name,
+    "jobTitle": member.role || "Real Estate Consultant",
+    "worksFor": {
+      "@type": "Organization",
+      "name": "Triad Realty",
+      "logo": "https://res.cloudinary.com/dhxttgpfj/image/upload/v1783444277/logo_ciuljv.png"
+    },
+    "image": resolveMediaUrl(member.photo),
+    "email": member.email,
+    "telephone": member.phone,
+    "sameAs": [
+      member.linkedin,
+      member.instagram
+    ].filter(Boolean)
+  } : null;
+
+  const breadcrumbsSchema = member ? {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "Home",
+        "item": SITE_URL
+      },
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": "Team",
+        "item": `${SITE_URL}/team`
+      },
+      {
+        "@type": "ListItem",
+        "position": 3,
+        "name": member.name,
+        "item": canonicalUrl
+      }
+    ]
+  } : null;
+
   return (
     <>
+      {member && (
+        <Helmet>
+          <title>{`${member.name} | Real Estate Consultant Triad Realty`}</title>
+          <meta name="description" content={`Contact ${member.name}, ${member.role || "Property Consultant"} at Triad Realty Dubai. Speaks: ${member.speaks}. Specializations: ${member.specializations?.join(", ") || ""}.`} />
+          <link rel="canonical" href={canonicalUrl} />
+          <meta property="og:title" content={`${member.name} | Real Estate Consultant Triad Realty`} />
+          <meta property="og:description" content={`Contact ${member.name}, ${member.role || "Property Consultant"} at Triad Realty.`} />
+          <meta property="og:type" content="profile" />
+          <meta property="og:url" content={canonicalUrl} />
+          <meta property="og:image" content={resolveMediaUrl(member.photo)} />
+          <meta name="twitter:card" content="summary_large_image" />
+          {personSchema && <script type="application/ld+json">{JSON.stringify(personSchema)}</script>}
+          {breadcrumbsSchema && <script type="application/ld+json">{JSON.stringify(breadcrumbsSchema)}</script>}
+        </Helmet>
+      )}
+
       {/* ── PROFILE HERO ── */}
       <section className="pt-32 pb-20 bg-[var(--bg-alt)]">
         <div className="container-x px-5 lg:px-12">
-          <Link
-            to="/team"
-            className="inline-flex items-center gap-2 text-sm uppercase tracking-widest text-[var(--muted)] hover:text-[var(--ink)] transition-colors mb-10"
-          >
-            <ArrowLeft size={16} /> Back to Team
-          </Link>
+          <Breadcrumbs items={[{ label: "Team", url: "/team" }, { label: member.name, url: `/team/${member.id}` }]} />
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-20 items-start">
             {/* Photo */}
@@ -76,7 +135,10 @@ export default function TeamMember() {
                 {member.photo ? (
                   <img
                     src={resolveMediaUrl(member.photo)}
-                    alt={member.name}
+                    alt={`Real Estate Advisor ${member.name}`}
+                    width={300}
+                    height={400}
+                    loading="eager"
                     style={{ objectFit: "cover", objectPosition: "50% 30%" }}
                     className="w-full h-full object-cover"
                   />

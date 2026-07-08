@@ -3,7 +3,9 @@ import { MILESTONES } from "../data";
 import { Phone, Mail, Instagram, Linkedin, Facebook, ArrowUpRight, House, Building2, Trophy, Globe2, Play } from "lucide-react";
 import { Link } from "react-router-dom";
 import axios from "axios";
-import { API_URL as API, resolveMediaUrl } from "../config";
+import { API_URL as API, resolveMediaUrl, SITE_URL } from "../config";
+import { Helmet } from "react-helmet-async";
+import Breadcrumbs from "../components/Breadcrumbs";
 
 function toWhatsApp(phone) {
   if (!phone) return "";
@@ -24,7 +26,7 @@ const DEFAULT_HOMEPAGE_SETTINGS = {
   stat3_label: "Awards received",
   stat4_value: "11",
   stat4_label: "Countries",
-  founders_image_url: "/three_founders.jpg",
+  founders_image_url: "https://res.cloudinary.com/dhxttgpfj/image/upload/v1783444306/three_founders_kuwre9.jpg",
   team_comes_first: false,
 };
 
@@ -107,8 +109,11 @@ export default function About() {
         {/* Three Founders Group Photo — full colour with text overlay */}
         <div className="w-full aspect-[21/9] overflow-hidden relative shadow-lg mt-12 img-zoom border border-white/10">
           <img
-            src="/group_photo.jpg"
+            src={resolveMediaUrl(homepageSettings.founders_image_url)}
             alt="Three Founders of Triad Realty"
+            width={1200}
+            height={514}
+            loading="lazy"
             className="w-full h-full object-cover transition-all duration-700"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent flex items-end p-8 md:p-12">
@@ -122,7 +127,15 @@ export default function About() {
             <div key={f.id || f.name} className="group" data-testid={`founder-${(f.name || "").toLowerCase().replace(/\s+/g, "-")}`}>
               <div className="aspect-[3/4] img-zoom bg-[var(--surface-dark,#141414)] relative">
                 {f.photo ? (
-                  <img src={resolveMediaUrl(f.photo)} alt={f.name} style={{ objectFit: "cover", objectPosition: "50% 30%" }} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700" />
+                  <img 
+                    src={resolveMediaUrl(f.photo)} 
+                    alt={`Triad Realty Founder ${f.name}`} 
+                    width={300}
+                    height={400}
+                    loading="lazy"
+                    style={{ objectFit: "cover", objectPosition: "50% 30%" }} 
+                    className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700" 
+                  />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center bg-white/5 text-white">
                     <span className="font-display text-6xl text-[var(--gold)]">
@@ -217,7 +230,15 @@ export default function About() {
             <div key={t.id || t.name} className="group" data-testid={`about-team-${(t.name || "").toLowerCase().replace(/\s+/g, "-")}`}>
               <div className="aspect-[3/4] img-zoom bg-[var(--surface-dark,#141414)] relative">
                 {t.photo ? (
-                  <img src={resolveMediaUrl(t.photo)} alt={t.name} style={{ objectFit: "cover", objectPosition: "50% 30%" }} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700" />
+                  <img 
+                    src={resolveMediaUrl(t.photo)} 
+                    alt={`Triad Realty Team Member ${t.name}`} 
+                    width={300}
+                    height={400}
+                    loading="lazy"
+                    style={{ objectFit: "cover", objectPosition: "50% 30%" }} 
+                    className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700" 
+                  />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center bg-white/5 text-white">
                     <span className="font-display text-6xl text-[var(--gold)]">
@@ -301,12 +322,42 @@ export default function About() {
     </section>
   );
 
+  const canonicalUrl = `${SITE_URL}/about`;
+  const aboutSchema = {
+    "@context": "https://schema.org",
+    "@type": "AboutPage",
+    "mainEntity": {
+      "@type": "Organization",
+      "name": "Triad Realty",
+      "url": SITE_URL,
+      "logo": "https://res.cloudinary.com/dhxttgpfj/image/upload/v1783444277/logo_ciuljv.png",
+      "description": "Discreet, data-led property consultancy across Dubai and the Northern Emirates — off-plan investments, resale acquisitions, and luxury portfolio management."
+    }
+  };
+
   return (
     <>
+      <Helmet>
+        <title>About Us | Triad Realty Dubai</title>
+        <meta name="description" content="Discover Triad Realty, a premier Dubai-based property consultancy founded on sharp market intelligence, discretion, and data-led portfolio planning." />
+        <link rel="canonical" href={canonicalUrl} />
+        <meta property="og:title" content="About Us | Triad Realty Dubai" />
+        <meta property="og:description" content="Learn about our team, conviction, and premium real estate advisory services in the UAE." />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content={canonicalUrl} />
+        <meta property="og:image" content={`${SITE_URL}/og-image.jpg`} />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:image" content={`${SITE_URL}/twitter-image.jpg`} />
+        <script type="application/ld+json">{JSON.stringify(aboutSchema)}</script>
+      </Helmet>
+
       <section className="relative h-[45vh] min-h-[350px] w-full overflow-hidden bg-neutral-950 flex items-end pb-12 border-b border-white/10" data-testid="about-hero">
         <img
-          src="/background.png"
+          src="https://res.cloudinary.com/dhxttgpfj/image/upload/v1783444297/background_fualmf.png"
           alt="Triad Realty Banner"
+          width={1920}
+          height={600}
+          loading="lazy"
           className="absolute inset-0 w-full h-full object-cover opacity-45"
         />
         {/* Gradient overlay for contrast and premium feel */}
@@ -314,6 +365,7 @@ export default function About() {
         
         <div className="container-x relative px-5 lg:px-12 z-[3] w-full">
           <div className="max-w-4xl">
+            <Breadcrumbs items={[{ label: "About", url: "/about" }]} />
             <div className="overline text-[var(--gold)] tracking-[0.25em] text-xs">About Triad</div>
             <h1 className="font-display text-4xl md:text-5xl mt-3 tracking-tight leading-tight text-white">
               Property, practiced as a <em className="text-[var(--gold)]">craft.</em>
@@ -349,11 +401,11 @@ export default function About() {
 
 
 
-      {/* LATEST LAUNCH UPDATES (moved here) */}
+      {/* ABOUT TRIAD REALTY */}
       <section className="section-pad bg-white latest-launch-updates" data-testid="about-launch-updates">
         <div className="container-x">
           <div className="text-center max-w-5xl mx-auto mb-12" data-reveal>
-            <div className="overline text-[var(--gold-deep)]">Latest Launch Updates</div>
+            <div className="overline text-[var(--gold-deep)]">ABOUT TRIAD REALTY</div>
             <h2 className="font-display text-4xl md:text-6xl mt-5 leading-none">{homepageSettings.launch_title}</h2>
             <p className="text-lg leading-relaxed text-[var(--ink-2)] mt-6">
               {homepageSettings.launch_description}

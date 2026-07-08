@@ -39,7 +39,7 @@ export default function Intro() {
       <div className="relative flex flex-col items-center gap-6 text-center animate-fade-in">
         <div className="flex items-center gap-4 sm:gap-6">
           <img
-            src="/triad_logo.jpeg"
+            src="https://res.cloudinary.com/dhxttgpfj/image/upload/v1783444277/logo_ciuljv.png"
             alt="Triad Realty Logo"
             className="h-16 sm:h-20 w-auto object-contain flex-shrink-0"
           />

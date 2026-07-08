@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, ArrowUpRight, Calendar, Clock } from "lucide-react";
-
-import { API_URL as API, resolveMediaUrl } from "../config";
+import { API_URL as API, resolveMediaUrl, SITE_URL } from "../config";
+import { Helmet } from "react-helmet-async";
+import Breadcrumbs from "../components/Breadcrumbs";
 
 export function Blogs() {
   const [items, setItems] = useState([]);
@@ -17,14 +18,45 @@ export function Blogs() {
     };
   }, []);
   const [feature, ...rest] = items;
+  const canonicalUrl = `${SITE_URL}/blogs`;
+  const blogsSchema = {
+    "@context": "https://schema.org",
+    "@type": "Blog",
+    "name": "Triad Realty Market Insights",
+    "url": canonicalUrl,
+    "description": "Premium real estate insights, market analyses, and off-plan investment updates in Dubai & the UAE."
+  };
+
   return (
     <>
+      <Helmet>
+        <title>Market Insights & Analyses | Triad Realty</title>
+        <meta name="description" content="Discover premium real estate insights, off-plan investment guides, and strategic market reports for Dubai and UAE real estate." />
+        <link rel="canonical" href={canonicalUrl} />
+        <meta property="og:title" content="Market Insights & Analyses | Triad Realty" />
+        <meta property="og:description" content="Discover premium real estate insights and strategic market reports for Dubai and UAE real estate." />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content={canonicalUrl} />
+        <meta property="og:image" content={`${SITE_URL}/og-image.jpg`} />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:image" content={`${SITE_URL}/twitter-image.jpg`} />
+        <script type="application/ld+json">{JSON.stringify(blogsSchema)}</script>
+      </Helmet>
+
       <section className="section-pad pt-40 bg-white">
         <div className="container-x">
+          <Breadcrumbs items={[{ label: "Blogs", url: "/blogs" }]} />
           {feature && (
             <Link to={`/blogs/${feature.id}`} className="grid grid-cols-1 lg:grid-cols-12 gap-10 group" data-testid="blog-feature">
               <div className="lg:col-span-7 img-zoom aspect-[16/10]">
-                <img src={resolveMediaUrl(feature.cover)} alt="" className="w-full h-full object-cover" />
+                <img 
+                  src={resolveMediaUrl(feature.cover)} 
+                  alt={`Feature Article: ${feature.title}`} 
+                  width={800}
+                  height={500}
+                  loading="eager"
+                  className="w-full h-full object-cover" 
+                />
               </div>
               <div className="lg:col-span-5 self-center">
                 <div className="overline text-[var(--gold-deep)]">{feature.category}</div>
@@ -42,7 +74,16 @@ export function Blogs() {
           <div className="mt-20 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
             {rest.map((b) => (
               <Link to={`/blogs/${b.id}`} key={b.id} className="group" data-testid={`blog-${b.id}`}>
-                <div className="aspect-[4/3] img-zoom"><img src={resolveMediaUrl(b.cover)} alt="" className="w-full h-full object-cover" /></div>
+                <div className="aspect-[4/3] img-zoom">
+                  <img 
+                    src={resolveMediaUrl(b.cover)} 
+                    alt={b.title} 
+                    width={400}
+                    height={300}
+                    loading="lazy"
+                    className="w-full h-full object-cover" 
+                  />
+                </div>
                 <div className="overline text-[var(--gold-deep)] mt-5">{b.category}</div>
                 <h3 className="font-display text-2xl mt-2 group-hover:text-[var(--gold-deep)] transition-colors">{b.title}</h3>
                 <p className="text-sm text-[var(--muted)] mt-2">{b.excerpt}</p>
@@ -73,11 +114,44 @@ export function BlogDetail() {
     };
   }, [id]);
   if (!b) return <div className="pt-40 section-pad container-x"><p>Loading…</p></div>;
+
+  const canonicalUrl = `${SITE_URL}/blogs/${id}`;
+  const blogPostSchema = {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    "headline": b.title,
+    "image": resolveMediaUrl(b.cover),
+    "datePublished": b.date,
+    "author": {
+      "@type": "Person",
+      "name": b.author || "Triad Consultant"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "Triad Realty",
+      "logo": "https://res.cloudinary.com/dhxttgpfj/image/upload/v1783444277/logo_ciuljv.png"
+    },
+    "description": b.excerpt
+  };
+
   return (
     <>
+      <Helmet>
+        <title>{`${b.title} | Triad Realty Insights`}</title>
+        <meta name="description" content={b.excerpt} />
+        <link rel="canonical" href={canonicalUrl} />
+        <meta property="og:title" content={`${b.title} | Triad Realty Insights`} />
+        <meta property="og:description" content={b.excerpt} />
+        <meta property="og:type" content="article" />
+        <meta property="og:url" content={canonicalUrl} />
+        <meta property="og:image" content={resolveMediaUrl(b.cover)} />
+        <meta name="twitter:card" content="summary_large_image" />
+        <script type="application/ld+json">{JSON.stringify(blogPostSchema)}</script>
+      </Helmet>
+
       <section className="pt-32" data-testid="blog-detail">
         <div className="container-x px-5 lg:px-12">
-          <Link to="/blogs" className="text-xs uppercase tracking-[0.22em] flex items-center gap-2 link-gold"><ArrowLeft size={14} />All articles</Link>
+          <Breadcrumbs items={[{ label: "Blogs", url: "/blogs" }, { label: b.title, url: `/blogs/${b.id}` }]} />
           <div className="overline text-[var(--gold-deep)] mt-10">{b.category}</div>
           <h1 className="font-display text-4xl md:text-6xl mt-4 leading-[1.05] max-w-4xl">{b.title}</h1>
           <div className="flex gap-5 text-sm text-[var(--muted)] mt-6 tabular">
@@ -85,7 +159,16 @@ export function BlogDetail() {
           </div>
         </div>
         <div className="container-x px-5 lg:px-12 mt-12">
-          <div className="aspect-[16/9] img-zoom"><img src={resolveMediaUrl(b.cover)} alt="" className="w-full h-full object-cover" /></div>
+          <div className="aspect-[16/9] img-zoom">
+            <img 
+              src={resolveMediaUrl(b.cover)} 
+              alt={b.title} 
+              width={1200}
+              height={675}
+              loading="eager"
+              className="w-full h-full object-cover" 
+            />
+          </div>
         </div>
         <div className="container-x px-5 lg:px-12 max-w-3xl mx-auto mt-16 pb-32">
           <p className="text-xl leading-relaxed first-letter:font-display first-letter:text-6xl first-letter:float-left first-letter:mr-3 first-letter:text-[var(--gold-deep)]">

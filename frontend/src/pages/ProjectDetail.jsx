@@ -2,7 +2,9 @@ import { useEffect, useState, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import axios from "axios";
 import { Download, MapPin, Phone, Mail, ArrowLeft, ChevronRight } from "lucide-react";
-import { API_URL as API, resolveMediaUrl } from "../config";
+import { API_URL as API, resolveMediaUrl, SITE_URL } from "../config";
+import { Helmet } from "react-helmet-async";
+import Breadcrumbs from "../components/Breadcrumbs";
 
 function toProjectViewModel(item) {
   if (!item) return null;
@@ -104,17 +106,93 @@ export default function ProjectDetail() {
     );
   }
 
+  const canonicalUrl = `${SITE_URL}/projects/${id}`;
+  
+  // Structured Data (JSON-LD Product/RealEstateListing Schema)
+  const projectSchema = p ? {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "name": p.name,
+    "image": p.hero,
+    "description": p.description || p.tagline || "",
+    "offers": {
+      "@type": "Offer",
+      "priceCurrency": "AED",
+      "price": p.price_from || 0,
+      "priceSpecification": {
+        "@type": "UnitPriceSpecification",
+        "price": p.price_from || 0,
+        "priceCurrency": "AED",
+        "referenceQuantity": {
+          "@type": "QuantitativeValue",
+          "value": 1,
+          "unitCode": "EAD"
+        }
+      }
+    },
+    "brand": {
+      "@type": "Brand",
+      "name": p.developer
+    }
+  } : null;
+
+  const breadcrumbsSchema = p ? {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "Home",
+        "item": SITE_URL
+      },
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": "Projects",
+        "item": `${SITE_URL}/projects`
+      },
+      {
+        "@type": "ListItem",
+        "position": 3,
+        "name": p.name,
+        "item": canonicalUrl
+      }
+    ]
+  } : null;
+
   return (
     <>
+      {p && (
+        <Helmet>
+          <title>{`${p.name} by ${p.developer} | Triad Realty`}</title>
+          <meta name="description" content={`Discover ${p.name} in ${p.location}, ${p.emirate}. Configuration: ${p.configuration.join(", ")}. Handover: ${p.handover}. View starting price & map details.`} />
+          <link rel="canonical" href={canonicalUrl} />
+          <meta property="og:title" content={`${p.name} by ${p.developer} | Triad Realty`} />
+          <meta property="og:description" content={`Discover ${p.name} in ${p.location}, ${p.emirate}. Handover: ${p.handover}.`} />
+          <meta property="og:type" content="product" />
+          <meta property="og:url" content={canonicalUrl} />
+          <meta property="og:image" content={p.hero} />
+          <meta name="twitter:card" content="summary_large_image" />
+          {projectSchema && <script type="application/ld+json">{JSON.stringify(projectSchema)}</script>}
+          {breadcrumbsSchema && <script type="application/ld+json">{JSON.stringify(breadcrumbsSchema)}</script>}
+        </Helmet>
+      )}
+
       {/* ── Hero ── */}
       <section className="relative h-[80vh] overflow-hidden" data-testid="pdetail-hero">
-        <img src={p.hero} alt={p.name} className="w-full h-full object-cover kenburns" />
+        <img 
+          src={p.hero} 
+          alt={`${p.name} Project Hero Banner`} 
+          width={1920}
+          height={800}
+          loading="eager"
+          className="w-full h-full object-cover kenburns" 
+        />
         <div className="absolute inset-0 bg-gradient-to-b from-black/30 to-black/70" />
         <div className="absolute inset-0 flex flex-col justify-end">
           <div className="container-x px-5 lg:px-12 pb-20">
-            <Link to="/projects" className="text-white/80 flex items-center gap-2 text-xs uppercase tracking-[0.22em]">
-              <ArrowLeft size={14} />All Projects
-            </Link>
+            <Breadcrumbs items={[{ label: "Projects", url: "/projects" }, { label: p.name, url: `/projects/${p.id}` }]} />
             <div className="overline text-[var(--gold)] mt-8">
               {p.developer}{p.developer && p.emirate ? " · " : ""}{p.emirate}
             </div>
@@ -229,7 +307,14 @@ export default function ProjectDetail() {
                   className={`img-zoom ${i === 0 ? "md:row-span-2 aspect-[4/5]" : "aspect-[4/3]"}`}
                   data-testid={`gallery-img-${i}`}
                 >
-                  <img src={g} alt="" className="w-full h-full object-cover" />
+                  <img 
+                    src={g} 
+                    alt={`${p.name} Gallery Image ${i + 1}`} 
+                    width={i === 0 ? 600 : 400}
+                    height={i === 0 ? 750 : 300}
+                    loading="lazy"
+                    className="w-full h-full object-cover" 
+                  />
                 </div>
               ))}
             </div>
@@ -251,7 +336,14 @@ export default function ProjectDetail() {
                       </a>
                     </div>
                   ) : (
-                    <img src={p.floor_plan} alt="floor plan" className="w-full max-h-[600px] object-contain mx-auto" />
+                    <img 
+                      src={p.floor_plan} 
+                      alt={`${p.name} Detailed Floor Plan Blueprint`} 
+                      width={800}
+                      height={600}
+                      loading="lazy"
+                      className="w-full max-h-[600px] object-contain mx-auto" 
+                    />
                   )}
                   <div className="mt-6 flex justify-between items-center flex-wrap gap-4">
                     <div className="text-sm text-[var(--muted)]">Detailed plans by configuration available on request.</div>
@@ -311,7 +403,14 @@ export default function ProjectDetail() {
                     onClick={() => setMapFullscreen(true)}
                     data-testid="map-container"
                   >
-                    <img src={p.map_image} alt="Location Map" className="w-full h-full object-cover" />
+                    <img 
+                      src={p.map_image} 
+                      alt={`Location Map of ${p.name} in ${p.location}`} 
+                      width={800}
+                      height={600}
+                      loading="lazy"
+                      className="w-full h-full object-cover" 
+                    />
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
                       <span className="text-white text-xs uppercase tracking-[0.2em] bg-black/60 px-4 py-2 border border-white/20">
                         View Fullscreen
@@ -446,7 +545,10 @@ export default function ProjectDetail() {
           </button>
           <img
             src={p.map_image}
-            alt="Project Location Map"
+            alt={`Project Location Map of ${p.name}`}
+            width={1200}
+            height={900}
+            loading="lazy"
             className="max-w-full max-h-[90vh] object-contain shadow-2xl rounded border border-white/10"
             onClick={(e) => e.stopPropagation()}
             data-testid="map-fullscreen-image"

@@ -3,10 +3,24 @@
     <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="theme-color" content="#000000" />
-        <meta name="description" content="A product of emergent.sh" />
-        <link rel="icon" type="image/jpeg" href="/triad_logo.jpeg" />
-        <link rel="apple-touch-icon" href="/triad_logo.jpeg" />
+        <meta name="theme-color" content="#0A2540" />
+        <meta name="description" content="Premium Real Estate Services in the UAE." />
+        <link rel="icon" href="/favicon.ico" />
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+        <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#0A2540" />
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="msapplication-config" content="/browserconfig.xml" />
+        <meta name="msapplication-TileColor" content="#0A2540" />
+
+        <!-- Apple iOS Web App Meta Tags -->
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="Triad" />
+        
+        <!-- Apple iOS Splash Screen / Startup Image Fallback -->
+        <link rel="apple-touch-startup-image" href="/android-chrome-512x512.png" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600&family=Outfit:wght@200;300;400;500;600;700&display=swap" rel="stylesheet" />
@@ -14,8 +28,27 @@
         <script>window.addEventListener("error",function(e){if(e.error instanceof DOMException&&e.error.name==="DataCloneError"&&e.message&&e.message.includes("PerformanceServerTiming")){e.stopImmediatePropagation();e.preventDefault()}},true);</script>
         <!-- emergent-main.js: enable only for Emergent preview builds, not production -->
         <!-- <script src="https://assets.emergent.sh/scripts/emergent-main.js"></script> -->
+
+        <!-- Google Analytics 4 (GA4) -->
+        <script async src="https://www.googletagmanager.com/gtag/js?id=G-GA_MEASUREMENT_ID_PLACEHOLDER"></script>
+        <script>
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'G-GA_MEASUREMENT_ID_PLACEHOLDER');
+        </script>
+
+        <!-- Microsoft Clarity -->
+        <script type="text/javascript">
+            (function(c,l,a,r,i,t,y){
+                c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+                t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+                y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+            })(window,document,"clarity","script","CLARITY_PROJECT_ID_PLACEHOLDER");
+        </script>
     </head>
     <body>
+        <a href="#main-content" class="skip-to-content">Skip to Main Content</a>
         <noscript>You need to enable JavaScript to run this app.</noscript>
         <div id="root"></div>
         <!--

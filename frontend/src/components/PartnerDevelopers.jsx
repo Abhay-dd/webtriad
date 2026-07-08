@@ -19,7 +19,14 @@ export default function PartnerDevelopers() {
           {/* Double the list for seamless looping */}
           {[...DEVELOPERS, ...DEVELOPERS, ...DEVELOPERS].map((dev, idx) => (
             <div key={idx} className="flex-shrink-0 flex items-center justify-center opacity-70 grayscale hover:grayscale-0 hover:opacity-100 transition-all duration-300">
-              <img src={dev.logo} alt={dev.name} className="h-10 md:h-16 object-contain max-w-[150px]" />
+              <img 
+                src={dev.logo} 
+                alt={`${dev.name} Developer Logo`} 
+                width={150}
+                height={64}
+                loading="lazy"
+                className="h-10 md:h-16 object-contain max-w-[150px]" 
+              />
             </div>
           ))}
         </div>

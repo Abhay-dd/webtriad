@@ -769,3 +769,33 @@ body.admin-sidebar-open {
     transform: translateX(0);
   }
 }
+
+/* Accessibility: Skip to Main Content */
+.skip-to-content {
+  position: absolute;
+  left: -9999px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  z-index: -999;
+  transition: all 0.2s ease;
+}
+
+.skip-to-content:focus {
+  position: fixed;
+  left: 16px;
+  top: 16px;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  background: var(--gold, #c5a880);
+  color: var(--ink, #0d0d0d);
+  padding: 12px 24px;
+  border: 1px solid var(--ink, #0d0d0d);
+  z-index: 99999;
+  outline: none;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}

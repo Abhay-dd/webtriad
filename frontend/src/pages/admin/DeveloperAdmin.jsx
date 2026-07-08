@@ -907,7 +907,7 @@ export default function DeveloperAdmin() {
         <div className="px-6 py-5 border-b border-white/10">
           <div className="flex items-center gap-3 min-w-0">
             <img
-              src="/triad_logo.jpeg"
+              src="https://res.cloudinary.com/dhxttgpfj/image/upload/v1783444277/logo_ciuljv.png"
               alt="Triad Realty"
               className="h-9 w-auto object-contain flex-shrink-0"
             />

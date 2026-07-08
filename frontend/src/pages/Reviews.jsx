@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { API_URL as API, resolveMediaUrl } from "../config";
+import { API_URL as API, resolveMediaUrl, SITE_URL } from "../config";
 import { Film, Star, Quote, X, Play } from "lucide-react";
 import { REVIEWS } from "../data";
+import { Helmet } from "react-helmet-async";
+import Breadcrumbs from "../components/Breadcrumbs";
 
 export default function Reviews() {
   const [reviews, setReviews] = useState([]);
@@ -143,10 +145,23 @@ export default function Reviews() {
   const videoReviews = reviews.filter((r) => r.youtubeCode && r.youtubeCode.trim() !== "");
   const textReviews = reviews.filter((r) => !r.youtubeCode || r.youtubeCode.trim() === "");
 
+  const canonicalUrl = `${SITE_URL}/reviews`;
+
   return (
     <>
+      <Helmet>
+        <title>Client Testimonials & Video Reviews | Triad Realty</title>
+        <meta name="description" content="Read reviews and watch video testimonials from global investors and clients who built their UAE portfolios with Triad Realty." />
+        <link rel="canonical" href={canonicalUrl} />
+        <meta property="og:title" content="Client Testimonials & Video Reviews | Triad Realty" />
+        <meta property="og:description" content="Watch video testimonials from clients who built portfolios with Triad Realty." />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content={canonicalUrl} />
+      </Helmet>
+
       <section className="pt-40 pb-12 section-pad bg-white" data-testid="reviews-hero">
         <div className="container-x px-5 lg:px-12">
+          <Breadcrumbs items={[{ label: "Reviews", url: "/reviews" }]} />
           <div className="overline text-[var(--gold-deep)]">Client Testimonials</div>
           <h1 className="font-display text-5xl md:text-7xl mt-6 leading-[0.95]">
             {settings.hero_title}

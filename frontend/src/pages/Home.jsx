@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, ArrowUpRight, Phone, Mail, Star, Quote, Instagram, Linkedin, Facebook } from "lucide-react";
 import axios from "axios";
+import { Helmet } from "react-helmet-async";
 
 function toWhatsApp(phone) {
   if (!phone) return "";
@@ -18,9 +19,9 @@ import {
   COMPANY,
 } from "../data";
 
-import { API_URL as API, resolveMediaUrl } from "../config";
+import { API_URL as API, resolveMediaUrl, SITE_URL } from "../config";
 
-const VIDEO_SRC = "/videos/AWARD_AZIZI.mov";
+const VIDEO_SRC = "https://res.cloudinary.com/dhxttgpfj/video/upload/v1783444338/WEBSITE_wg6h7g.mp4";
 
 const DEFAULT_HOMEPAGE_SETTINGS = {
   launch_title: "Why Triad Realty?",
@@ -35,7 +36,7 @@ const DEFAULT_HOMEPAGE_SETTINGS = {
   stat3_label: "Awards received",
   stat4_value: "9",
   stat4_label: "Countries",
-  founders_image_url: "/three_founders.jpg",
+  founders_image_url: "https://res.cloudinary.com/dhxttgpfj/image/upload/v1783444306/three_founders_kuwre9.jpg",
   team_comes_first: false,
 };
 
@@ -87,8 +88,11 @@ export default function Home() {
         {/* Founders Group Photo — full colour with text overlay */}
         <div className="w-full aspect-[21/9] overflow-hidden relative shadow-lg mb-12 img-zoom border border-white/10">
           <img 
-            src="/group_photo.jpg" 
+            src={resolveMediaUrl(homepageSettings.founders_image_url)} 
             alt="Three Founders of Triad Realty" 
+            width={1200}
+            height={514}
+            loading="lazy"
             className="w-full h-full object-cover transition-all duration-700"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent flex items-end p-8 md:p-12">
@@ -104,7 +108,15 @@ export default function Home() {
             <div key={t.id || t.name} className="group" data-testid={`team-${t.name.toLowerCase().replace(/\s+/g, "-")}`}>
               <div className="aspect-[3/4] img-zoom bg-[var(--surface-dark,#141414)] relative">
                 {t.photo ? (
-                  <img src={resolveMediaUrl(t.photo)} alt={t.name} style={{ objectFit: "cover", objectPosition: "50% 30%" }} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700" />
+                  <img 
+                    src={resolveMediaUrl(t.photo)} 
+                    alt={`Triad Realty Consultant ${t.name}`} 
+                    width={300}
+                    height={400}
+                    loading="lazy"
+                    style={{ objectFit: "cover", objectPosition: "50% 30%" }} 
+                    className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700" 
+                  />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center bg-white/5 text-white">
                     <span className="font-display text-6xl text-[var(--gold)]">
@@ -184,8 +196,60 @@ export default function Home() {
     </section>
   );
 
+  const canonicalUrl = SITE_URL;
+  const orgSchema = {
+    "@context": "https://schema.org",
+    "@type": "RealEstateAgent",
+    "name": "Triad Realty",
+    "url": canonicalUrl,
+    "logo": "https://res.cloudinary.com/dhxttgpfj/image/upload/v1783444277/logo_ciuljv.png",
+    "image": "https://res.cloudinary.com/dhxttgpfj/image/upload/v1783444306/three_founders_kuwre9.jpg",
+    "description": "Discreet, data-led property consultancy across Dubai and the Northern Emirates — off-plan investments, resale acquisitions, and luxury portfolio management.",
+    "telephone": "+97140000000",
+    "address": {
+      "@type": "PostalAddress",
+      "streetAddress": "Marina Plaza, Office 1402",
+      "addressLocality": "Dubai Marina",
+      "addressRegion": "Dubai",
+      "addressCountry": "AE"
+    },
+    "sameAs": [
+      "https://www.instagram.com/triadrealty",
+      "https://www.linkedin.com/company/triadrealty"
+    ]
+  };
+
+  const websiteSchema = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "Triad Realty",
+    "url": canonicalUrl,
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": `${canonicalUrl}/projects?q={search_term_string}`,
+      "query-input": "required name=search_term_string"
+    }
+  };
+
   return (
     <>
+      <Helmet>
+        <title>Triad Realty | Luxury Real Estate Dubai & UAE Off-Plan</title>
+        <meta name="description" content="Discreet, data-led property consultancy across Dubai and the Northern Emirates. Expert advisory for off-plan investments, resale acquisitions, and portfolios." />
+        <link rel="canonical" href={canonicalUrl} />
+        <meta property="og:title" content="Triad Realty | Luxury Real Estate Dubai & UAE Off-Plan" />
+        <meta property="og:description" content="Discreet, data-led property consultancy across Dubai and the Northern Emirates." />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content={canonicalUrl} />
+        <meta property="og:image" content={`${SITE_URL}/og-image.jpg`} />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Triad Realty | Luxury Real Estate Dubai & UAE" />
+        <meta name="twitter:description" content="Discreet, data-led property consultancy across Dubai and the Northern Emirates." />
+        <meta name="twitter:image" content={`${SITE_URL}/twitter-image.jpg`} />
+        <script type="application/ld+json">{JSON.stringify(orgSchema)}</script>
+        <script type="application/ld+json">{JSON.stringify(websiteSchema)}</script>
+      </Helmet>
+
       {/* HERO — local video */}
       <section className="relative h-screen w-full overflow-hidden bg-[var(--ink)]" data-testid="home-hero">
         <div className="absolute inset-0">
@@ -194,11 +258,10 @@ export default function Home() {
             loop
             muted
             playsInline
-            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 min-w-full min-h-full object-cover pointer-events-none"
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-auto max-h-full object-contain md:min-w-full md:min-h-full md:object-cover pointer-events-none"
             data-testid="hero-video"
-          >
-            <source src={VIDEO_SRC} type="video/mp4" />
-          </video>
+            src={VIDEO_SRC}
+          />
           {/* subtle dark overlay */}
           <div className="absolute inset-0 z-[2] bg-black/20" />
           {/* mobile-only: covers the in-video Triad award logo in portrait crop */}
@@ -302,7 +365,14 @@ export default function Home() {
                 data-testid={`launch-card-${p.id}`}
               >
                 <div className="img-zoom aspect-[4/5] relative" data-reveal="zoom">
-                  <img src={p.image} alt={p.title} className="w-full h-full object-cover" />
+                  <img 
+                    src={p.image} 
+                    alt={`${p.title} project by ${p.developer} in ${p.location}`} 
+                    width={400}
+                    height={500}
+                    loading="lazy"
+                    className="w-full h-full object-cover" 
+                  />
                   {p.isFeatured && (
                     <div className="absolute top-4 left-4 bg-[var(--ink)] text-[var(--gold)] overline px-3 py-1">
                       Hot Launch

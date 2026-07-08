@@ -1,0 +1,26 @@
+/* TEAM */
+Developer: Triad Development Team
+Designer: UI/UX Creative Desk
+QA: Quality Assurance Team
+DevOps: Systems Engineering Desk
+
+/* SITE */
+Company Name: Triad Realty
+Website: https://www.triadrealty.ae
+Country: United Arab Emirates (UAE)
+Technology Stack: React, FastAPI, MongoDB, Tailwind CSS, Cloudinary, PostHog
+Frontend: React (SPA), React Router, React Helmet Async, Tailwind CSS, Lucide React
+Backend: Python 3, FastAPI, Uvicorn, Starlette
+Database: MongoDB Atlas (via PyMongo & Motor)
+Cloud Hosting: AWS (Amazon Web Services), Nginx, Render
+CMS: Custom Admin Dashboard
+
+/* SOCIAL LINKS */
+Instagram: https://www.instagram.com/triadrealty
+Linkedin: https://www.linkedin.com/company/triadrealty
+Facebook: https://www.facebook.com/triadrealty
+
+/* METADATA */
+Copyright: Copyright (c) 2026 Triad Realty. All rights reserved.
+Version: 1.2.0
+Last Updated: 2026-07-08

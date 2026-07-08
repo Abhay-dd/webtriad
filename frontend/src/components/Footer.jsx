@@ -66,7 +66,7 @@ export default function Footer() {
           <div className="lg:col-span-5">
             <Link to="/" className="flex items-center gap-3 group">
               <img
-                src="/triad_logo.jpeg"
+                src="https://res.cloudinary.com/dhxttgpfj/image/upload/v1783444277/logo_ciuljv.png"
                 alt="Triad Realty Logo"
                 className="h-12 w-auto object-contain opacity-90 group-hover:opacity-100 transition-opacity"
               />

@@ -176,16 +176,8 @@ _server_start_time: datetime = datetime.now(timezone.utc)
 _allowed_hosts_raw = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1,*.localhost")
 _allowed_hosts = [h.strip() for h in _allowed_hosts_raw.split(",") if h.strip()]
 
-# Automatically detect Render environment and allow its hostnames
-if os.environ.get("RENDER") == "true":
-    if "*.onrender.com" not in _allowed_hosts:
-        _allowed_hosts.append("*.onrender.com")
-    _render_hostname = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
-    if _render_hostname and _render_hostname not in _allowed_hosts:
-        _allowed_hosts.append(_render_hostname)
-
-# Render's internal health checks and reverse proxy may send requests with
-# 'localhost' or IP addresses as the Host header.  Always include them so the
+# Internal health checks and reverse proxy may send requests with
+# 'localhost' or IP addresses as the Host header. Always include them so the
 # TrustedHostMiddleware doesn't reject those internal probes.
 for _internal in ("localhost", "127.0.0.1", "0.0.0.0"):
     if _internal not in _allowed_hosts:
@@ -614,7 +606,7 @@ DEFAULT_HOMEPAGE_SETTINGS = {
     "stat3_label": "Awards received",
     "stat4_value": "9",
     "stat4_label": "Countries",
-    "founders_image_url": "/three_founders.jpg",
+    "founders_image_url": "https://res.cloudinary.com/dhxttgpfj/image/upload/v1783444306/three_founders_kuwre9.jpg",
     "team_comes_first": False,
     "company_address": "Office 1204, Marina Plaza, Dubai Marina, Dubai, UAE",
     "company_phone": "+971 54 519 3393",
@@ -1032,12 +1024,24 @@ async def refresh_token_endpoint(
     response: Response,
     payload: Optional[RefreshIn] = None,
 ):
-    # Prioritize payload/body first, then fall back to cookies
+    # Prioritize payload/body first, then fall back to cookies, headers
     refresh_token = None
     if payload and payload.refresh_token:
         refresh_token = payload.refresh_token
     else:
         refresh_token = request.cookies.get("refresh_token")
+
+    if not refresh_token:
+        # Check custom X-Refresh-Token headers
+        refresh_token = request.headers.get("x-refresh-token") or request.headers.get("X-Refresh-Token")
+
+    if not refresh_token:
+        # Check standard Authorization header as fallback (only if it matches refresh token shape)
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            potential_token = auth_header.split(" ")[1]
+            if len(potential_token) == 64 and "." not in potential_token:
+                refresh_token = potential_token
 
     if not refresh_token:
         raise HTTPException(
@@ -1054,8 +1058,18 @@ async def refresh_token_endpoint(
             detail="Invalid refresh token",
         )
 
-    # Check expiration
-    expires_at = datetime.fromisoformat(token_record["expires_at"])
+    # Check expiration (robust datetime validation)
+    expires_val = token_record["expires_at"]
+    if isinstance(expires_val, str):
+        expires_at = datetime.fromisoformat(expires_val)
+    else:
+        expires_at = expires_val
+
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    else:
+        expires_at = expires_at.astimezone(timezone.utc)
+
     if expires_at < datetime.now(timezone.utc):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -2486,6 +2500,145 @@ async def serve_upload(filename: str):
             "Cache-Control": "public, max-age=31536000, immutable",
         },
     )
+
+
+@app.get("/robots.txt")
+async def serve_robots():
+    site_url = os.getenv("SITE_URL", "https://www.triadrealty.ae").rstrip("/")
+    content = (
+        "# Triad Realty - robots.txt\n\n"
+        "User-agent: *\n"
+        "Allow: /\n\n"
+        "# Private areas\n"
+        "Disallow: /admin/\n"
+        "Disallow: /dashboard/\n"
+        "Disallow: /login\n"
+        "Disallow: /register\n"
+        "Disallow: /api/\n"
+        "Disallow: /private/\n"
+        "Disallow: /tmp/\n"
+        "Disallow: /internal/\n\n"
+        "# Sitemap\n"
+        f"Sitemap: {site_url}/sitemap.xml\n\n"
+        "# Preferred host (supported by some search engines)\n"
+        f"Host: {site_url}"
+    )
+    return Response(content=content, media_type="text/plain")
+
+
+@app.get("/sitemap.xml")
+async def serve_sitemap():
+    # Base URL for sitemap loaded from environment variable SITE_URL
+    base_url = os.getenv("SITE_URL", "https://www.triadrealty.ae").rstrip("/")
+    current_date = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+
+    # Query all active database items dynamically
+    projects = await db_find("projects") or []
+    blogs = await db_find("blogs") or []
+    team_members = await db_find("team") or []
+
+    # Static pages configuration with specified priorities and frequencies:
+    # Homepage = 1.0 (daily)
+    # Properties = 0.9 (daily) -> /projects
+    # Services = 0.9 (monthly) -> /experience-immersive
+    # Communities = 0.9 (weekly) -> /gallery or /analysis
+    # Blog list = 0.8 (weekly) -> /blogs
+    # About = 0.8 (weekly) -> /about
+    # Contact = 0.8 (yearly) -> /contact
+    # Careers = 0.7 (weekly) -> /careers
+    static_routes = [
+        # (route, changefreq, priority)
+        ("", "daily", "1.0"),
+        ("/about", "weekly", "0.8"),
+        ("/projects", "daily", "0.9"),
+        ("/analysis", "weekly", "0.9"),
+        ("/reviews", "weekly", "0.8"),
+        ("/gallery", "weekly", "0.9"),
+        ("/blogs", "weekly", "0.8"),
+        ("/careers", "weekly", "0.7"),
+        ("/contact", "yearly", "0.8"),
+        ("/team", "weekly", "0.8"),
+        ("/experience-immersive", "monthly", "0.9"),
+    ]
+
+    xml_lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<!-- Dynamic XML Sitemap Generated for Triad Realty according to Google Sitemap Protocol -->',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+    ]
+
+    # Generate sitemap links for static routes
+    for route, freq, prio in static_routes:
+        xml_lines.append(
+            f"  <url>\n"
+            f"    <loc>{base_url}{route}</loc>\n"
+            f"    <lastmod>{current_date}</lastmod>\n"
+            f"    <changefreq>{freq}</changefreq>\n"
+            f"    <priority>{prio}</priority>\n"
+            f"  </url>"
+        )
+
+    # Dynamic real estate projects sitemap (/projects/:id)
+    # Priority: 0.9, Changefreq: daily
+    for proj in projects:
+        if isinstance(proj, dict) and "id" in proj:
+            # Check if there is an explicit updated timestamp, fallback to current_date
+            lastmod = proj.get("created_at") or proj.get("updated_at")
+            lastmod_val = current_date
+            if lastmod:
+                try:
+                    lastmod_val = datetime.fromisoformat(lastmod.replace("Z", "+00:00")).strftime('%Y-%m-%d')
+                except ValueError:
+                    pass
+
+            xml_lines.append(
+                f"  <url>\n"
+                f"    <loc>{base_url}/projects/{proj['id']}</loc>\n"
+                f"    <lastmod>{lastmod_val}</lastmod>\n"
+                f"    <changefreq>daily</changefreq>\n"
+                f"    <priority>0.9</priority>\n"
+                f"  </url>"
+            )
+
+    # Dynamic blog pages sitemap (/blogs/:id)
+    # Priority: 0.8, Changefreq: weekly
+    for blog in blogs:
+        if isinstance(blog, dict) and "id" in blog:
+            # Parse the blog's publication date if present
+            blog_date = blog.get("date")
+            lastmod_val = current_date
+            if blog_date:
+                try:
+                    # Validate standard YYYY-MM-DD parsing
+                    datetime.strptime(blog_date, "%Y-%m-%d")
+                    lastmod_val = blog_date
+                except ValueError:
+                    pass
+
+            xml_lines.append(
+                f"  <url>\n"
+                f"    <loc>{base_url}/blogs/{blog['id']}</loc>\n"
+                f"    <lastmod>{lastmod_val}</lastmod>\n"
+                f"    <changefreq>weekly</changefreq>\n"
+                f"    <priority>0.8</priority>\n"
+                f"  </url>"
+            )
+
+    # Dynamic team consultants sitemap (/team/:id)
+    # Priority: 0.7, Changefreq: monthly
+    for member in team_members:
+        if isinstance(member, dict) and "id" in member:
+            xml_lines.append(
+                f"  <url>\n"
+                f"    <loc>{base_url}/team/{member['id']}</loc>\n"
+                f"    <lastmod>{current_date}</lastmod>\n"
+                f"    <changefreq>monthly</changefreq>\n"
+                f"    <priority>0.7</priority>\n"
+                f"  </url>"
+            )
+
+    xml_lines.append("</urlset>")
+    return Response(content="\n".join(xml_lines), media_type="application/xml")
 
 
 # Catch-all: ALWAYS registered so React Router paths (/projects, /about, …)

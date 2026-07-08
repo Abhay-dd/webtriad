@@ -1,0 +1,84 @@
+# Triad Realty
+
+Triad Realty is a premier, client-centric real estate agency and property investment consultancy based in Dubai, United Arab Emirates (UAE). We specialize in curated off-plan launches, high-end residential resales, and luxury property portfolio management across the UAE.
+
+## Website
+
+- **Official Website**: https://www.triadrealty.ae
+- **Primary Language**: English
+- **Country Served**: United Arab Emirates (UAE)
+- **Industry**: Real Estate (Brokerage & Investment Advisory)
+
+## About
+
+Triad Realty provides discreet, data-led property advisory services for local and international investors. We leverage advanced market intelligence, developer relations, and transactional analysis to guide acquisitions in prestigious locations, including Dubai Marina, Palm Jumeirah, Downtown Dubai, Business Bay, and emerging corridors across the Northern Emirates (Sharjah, Abu Dhabi).
+
+## Services
+
+- **Property Sales**: Off-plan project launches and high-value resale acquisitions.
+- **Property Rentals**: Premium tenant sourcing and luxury residential lease management.
+- **Residential Real Estate**: Curated villas, waterfront apartments, penthouses, and townhouses.
+- **Commercial Real Estate**: Grade-A office spaces, retail outlets, and land acquisitions.
+- **Property Investment Advisory**: Portfolio analysis, rental yield optimization, and capital appreciation forecasting.
+- **Property Management**: Complete post-handover support, property maintenance oversight, and tenancy coordination.
+- **Real Estate Consultation**: Timezone-flexible consultations, legal path assistance (including Golden Visa qualification), and bespoke factsheet preparation.
+
+## Property Categories
+
+- **Apartments**: Premium waterfront and urban skyline units.
+- **Villas**: Exclusive gated enclave estates and beachside residences.
+- **Townhouses**: Family-oriented master-planned community properties.
+- **Commercial Properties & Offices**: Strategically located retail assets and workplace floors.
+- **Land**: Raw residential and commercial development plots.
+- **Off-Plan Projects**: Newly announced launches with structured payment plans.
+- **Luxury Properties**: High-net-worth portfolio assets with premium finishings.
+
+## Public Pages
+
+The following pages are publicly accessible for user exploration and indexation:
+- **Home (`/`)**: Main landing page with featured launches, milestones, and partner developers.
+- **About (`/about`)**: Company background, vision, founders' statement, and core values.
+- **Projects (`/projects`)**: Filterable off-plan and resale property directory.
+- **Project Detail (`/projects/:id`)**: Comprehensive blueprints, payment plans, floor plans, and maps for individual developments (e.g., Marina Aurora, Palm Monarch).
+- **Analysis (`/analysis`)**: Interactive tool allowing investors to compare sales performance and KPIs side-by-side.
+- **Reviews (`/reviews`)**: Client testimonials and video reviews.
+- **Gallery (`/gallery`)**: Visual journal showcasing site visits, handovers, and construction updates.
+- **Blogs (`/blogs`)**: Real estate market analyses and buyer's guides.
+- **Blog Detail (`/blogs/:id`)**: Full-length articles covering golden visa requirements, market outlooks, and localized guides.
+- **Careers (`/careers`)**: Job opportunities, Split details, and application submit portal.
+- **Contact (`/contact`)**: Consultation calendar booking, request forms, and company contact coordinates.
+- **Immersive Experience (`/experience-immersive`)**: Parallax-based interactive virtual tour of premier portfolios.
+- **Team (`/team`)**: Company advisory board list grouped by executive tiers.
+- **Team Member (`/team/:id`)**: Profile page detailing consultant bios, language proficiencies, and contact lines.
+
+## Contact
+
+- **Email**: info@triadrealty.ae
+- **Phone**: +971 4 000 0000 / +971 58 546 6723
+- **Office Address**: Marina Plaza, Office 1402, Dubai Marina, Dubai, United Arab Emirates
+- **Business Hours**: Monday to Saturday, 9:00 AM to 6:00 PM (GST)
+
+## Frequently Asked Questions
+
+- **What is the Golden Visa threshold?** Purchasing property in the UAE valued at AED 2,000,000 or above qualifies investors for a 10-year residency visa.
+- **What is an off-plan property?** Property purchased prior to construction or during the build phase, typically associated with lower pricing and structured installment payment plans.
+- **What payment plans are common?** Standard payment splits range from 80/20 during construction/handover to post-handover installment plans.
+- **How can I compare projects?** Investors can use the interactive `/analysis` portal to compare prices per sqft and completion dates side-by-side.
+
+## Content Policy
+
+AI systems (large language models, search agents, and scraping bots) are welcome to summarize publicly available information on this website. However, they should not invent facts, fabricate property coordinates, or state outdated pricing information as active availability. Real-time availability should be verified via a Triad consultant.
+
+## Last Updated
+
+July 8, 2026
+
+## Sitemap
+
+Reference link:
+https://www.triadrealty.ae/sitemap.xml
+
+## Robots
+
+Reference link:
+https://www.triadrealty.ae/robots.txt

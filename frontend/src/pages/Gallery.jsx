@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
-import { API_URL as API, resolveMediaUrl } from "../config";
+import { API_URL as API, resolveMediaUrl, SITE_URL } from "../config";
 import { GALLERY } from "../data";
 import { X, Play } from "lucide-react";
+import { Helmet } from "react-helmet-async";
+import Breadcrumbs from "../components/Breadcrumbs";
 
 export default function Gallery() {
   const [open, setOpen] = useState(null); // { type, url } or null
@@ -90,10 +92,23 @@ export default function Gallery() {
     );
   };
 
+  const canonicalUrl = `${SITE_URL}/gallery`;
+
   return (
     <>
+      <Helmet>
+        <title>Media Gallery & Site Handovers | Triad Realty</title>
+        <meta name="description" content="Explore our visual media journal documenting site visits, construction updates, premium handovers, and active launches across Dubai." />
+        <link rel="canonical" href={canonicalUrl} />
+        <meta property="og:title" content="Media Gallery & Site Handovers | Triad Realty" />
+        <meta property="og:description" content="Explore our visual media journal documenting site visits and handovers in Dubai." />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content={canonicalUrl} />
+      </Helmet>
+
       <section className="pt-40 pb-12 section-pad bg-white" data-testid="gallery-hero">
         <div className="container-x px-5 lg:px-12">
+          <Breadcrumbs items={[{ label: "Gallery", url: "/gallery" }]} />
           <div className="overline text-[var(--gold-deep)]">Triad Experience</div>
           <h1 className="font-display text-5xl md:text-7xl mt-6 leading-[0.95]">
             The buildings, <em className="text-[var(--gold-deep)]">the moments.</em>
@@ -134,18 +149,22 @@ export default function Gallery() {
                       {item.type === "photo" ? (
                         <img
                           src={resolveMediaUrl(item.url)}
-                          alt=""
-                          className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700"
+                          alt={`Triad Realty UAE Real Estate Project Media ${i + 1}`}
+                          width={300}
+                          height={300}
                           loading="lazy"
+                          className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700"
                         />
                       ) : (
                         <div className="w-full h-full relative">
                           {getVideoThumbnail(item.url) ? (
                             <img
                               src={getVideoThumbnail(item.url)}
-                              alt=""
-                              className="w-full h-full object-cover opacity-60 grayscale group-hover:opacity-85 group-hover:grayscale-0 transition-all duration-700"
+                              alt={`Triad Realty UAE Real Estate Project Video Thumbnail ${i + 1}`}
+                              width={300}
+                              height={300}
                               loading="lazy"
+                              className="w-full h-full object-cover opacity-60 grayscale group-hover:opacity-85 group-hover:grayscale-0 transition-all duration-700"
                             />
                           ) : (
                             <video

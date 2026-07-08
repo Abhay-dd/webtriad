@@ -3414,7 +3414,7 @@
       "stat3_label": "Awards received",
       "stat4_value": "9",
       "stat4_label": "Countries",
-      "founders_image_url": "/three_founders.jpg",
+      "founders_image_url": "https://res.cloudinary.com/dhxttgpfj/image/upload/v1783444306/three_founders_kuwre9.jpg",
       "team_comes_first": false,
       "company_address": "Office 1204, Marina Plaza, Dubai Marina, Dubai, UAE",
       "company_phone": "+971 54 519 3393",

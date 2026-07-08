@@ -94,7 +94,7 @@ export default function StaffAdmin() {
         <div className="px-6 py-5 border-b border-white/10 flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
             <img
-              src="/triad_logo.jpeg"
+              src="https://res.cloudinary.com/dhxttgpfj/image/upload/v1783444277/logo_ciuljv.png"
               alt="Triad Realty"
               className="h-9 w-auto object-contain flex-shrink-0"
             />
@@ -166,7 +166,7 @@ export default function StaffAdmin() {
             <Menu size={22} />
           </button>
           <div className="flex items-center gap-2.5">
-            <img src="/triad_logo.jpeg" alt="Triad Realty" className="h-8 w-auto object-contain" />
+            <img src="https://res.cloudinary.com/dhxttgpfj/image/upload/v1783444277/logo_ciuljv.png" alt="Triad Realty" className="h-8 w-auto object-contain" />
             <span className="font-display text-sm">Staff Portal</span>
           </div>
           <button

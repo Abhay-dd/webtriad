@@ -49,9 +49,9 @@ ENV STAFF_PASSWORD=Staff@Triad2024!
 ENV MONGO_URI=mongodb+srv://king8637g4ff_db_user:Triad123456@triad-cluster.zfjnhni.mongodb.net/?retryWrites=true&w=majority&appName=triad-cluster
 ENV DB_NAME=triad_realty
 
-# Hosts & CORS — accepts any *.onrender.com subdomain
-ENV ALLOWED_HOSTS=webtriad-9.onrender.com,*.onrender.com,localhost
-ENV CORS_ORIGINS=https://webtriad-9.onrender.com/
+# Hosts & CORS
+ENV ALLOWED_HOSTS=www.triadrealty.ae,triadrealty.ae,localhost
+ENV CORS_ORIGINS=https://www.triadrealty.ae,https://triadrealty.ae
 
 # Cloudinary — persistent image storage
 ENV CLOUDINARY_CLOUD_NAME=dhxttgpfj

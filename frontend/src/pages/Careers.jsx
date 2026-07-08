@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
-
-import { API_URL as API } from "../config";
+import { API_URL as API, SITE_URL } from "../config";
+import { Helmet } from "react-helmet-async";
+import Breadcrumbs from "../components/Breadcrumbs";
 
 const WHY = [
   { t: "Senior mentorship", d: "Direct partnership with founders and senior consultants from day one." },
@@ -33,11 +34,35 @@ export default function Careers() {
     }
   };
 
+  const canonicalUrl = `${SITE_URL}/careers`;
+  const careersSchema = {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "Careers & Partner Opportunities | Triad Realty",
+    "url": canonicalUrl,
+    "description": "Join our team of luxury real estate consultants in Dubai. Explore open roles and career opportunities at Triad Realty."
+  };
+
   return (
     <>
+      <Helmet>
+        <title>Careers & Opportunities | Triad Realty Dubai</title>
+        <meta name="description" content="Build your real estate career in Dubai with Triad Realty. Explore senior agent and portfolio advisor opportunities in our analytics-led team." />
+        <link rel="canonical" href={canonicalUrl} />
+        <meta property="og:title" content="Careers & Opportunities | Triad Realty Dubai" />
+        <meta property="og:description" content="Build your real estate career in Dubai with Triad Realty." />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content={canonicalUrl} />
+        <meta property="og:image" content={`${SITE_URL}/og-image.jpg`} />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:image" content={`${SITE_URL}/twitter-image.jpg`} />
+        <script type="application/ld+json">{JSON.stringify(careersSchema)}</script>
+      </Helmet>
+
       <section className="pt-40 pb-12 section-pad bg-white" data-testid="careers-hero">
         <div className="container-x grid grid-cols-1 lg:grid-cols-12 gap-12">
           <div className="lg:col-span-7">
+            <Breadcrumbs items={[{ label: "Careers", url: "/careers" }]} />
             <div className="overline text-[var(--gold-deep)]">Careers</div>
             <h1 className="font-display text-5xl md:text-7xl mt-6 leading-[0.95]">Build a career in <em className="text-[var(--gold-deep)]">UAE real estate.</em></h1>
             <p className="text-lg mt-8 max-w-xl text-[var(--ink-2)]">We hire slowly, mentor seriously, and reward results — joining Triad is joining a small team with an outsized point of view.</p>

@@ -34,7 +34,7 @@ export default function Header() {
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2.5 z-10" data-testid="logo-link">
             <img
-              src="/triad_logo.jpeg"
+              src="https://res.cloudinary.com/dhxttgpfj/image/upload/v1783444277/logo_ciuljv.png"
               alt="Triad Realty Logo"
               className="h-10 w-auto object-contain"
             />
@@ -133,7 +133,7 @@ export default function Header() {
           {/* Logo in overlay */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-white/8">
             <Link to="/" onClick={() => setOpen(false)} className="flex items-center gap-2.5">
-              <img src="/triad_logo.jpeg" alt="Triad Realty" className="h-9 w-auto object-contain" />
+              <img src="https://res.cloudinary.com/dhxttgpfj/image/upload/v1783444277/logo_ciuljv.png" alt="Triad Realty" className="h-9 w-auto object-contain" />
               <div className="font-display text-white text-base tracking-tight">TRIAD REALTY</div>
             </Link>
             <button
