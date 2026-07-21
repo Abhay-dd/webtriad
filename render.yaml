@@ -7,7 +7,7 @@ services:
     # The buildCommand navigates up to build the React app first.
     rootDir: backend
     buildCommand: |
-      cd ../frontend && npm install --legacy-peer-deps && GENERATE_SOURCEMAP=false npm run build && cp -r build ../backend/frontend_build && cd ../backend && pip install -r requirements.txt
+      cd ../frontend && npm install --legacy-peer-deps && GENERATE_SOURCEMAP=false REACT_APP_SITE_URL=https://webtriad-9.onrender.com REACT_APP_BACKEND_URL="" npm run build && cp -r build ../backend/frontend_build && cd ../backend && pip install -r requirements.txt
     startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
     plan: free
 

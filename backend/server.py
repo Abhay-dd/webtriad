@@ -176,6 +176,18 @@ _server_start_time: datetime = datetime.now(timezone.utc)
 _allowed_hosts_raw = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1,*.localhost")
 _allowed_hosts = [h.strip() for h in _allowed_hosts_raw.split(",") if h.strip()]
 
+# Always explicitly allow the Render production hostname
+_RENDER_URL = "webtriad-9.onrender.com"
+if _RENDER_URL not in _allowed_hosts:
+    _allowed_hosts.append(_RENDER_URL)
+if "*.onrender.com" not in _allowed_hosts:
+    _allowed_hosts.append("*.onrender.com")
+
+# Render also sets RENDER_EXTERNAL_HOSTNAME at runtime — add it too
+_render_hostname = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+if _render_hostname and _render_hostname not in _allowed_hosts:
+    _allowed_hosts.append(_render_hostname)
+
 # Internal health checks and reverse proxy may send requests with
 # 'localhost' or IP addresses as the Host header. Always include them so the
 # TrustedHostMiddleware doesn't reject those internal probes.
@@ -183,11 +195,14 @@ for _internal in ("localhost", "127.0.0.1", "0.0.0.0"):
     if _internal not in _allowed_hosts:
         _allowed_hosts.append(_internal)
 
-# If we are in production and have no external hostnames (only local ones),
-# log a warning and fall back to allowing '*' so the deployment doesn't break.
-if IS_PROD and all(h in {"localhost", "127.0.0.1", "0.0.0.0", "*.localhost"} for h in _allowed_hosts):
+# On Render, TLS is terminated at the load-balancer level — the app only sees
+# plain HTTP with rewritten Host headers. Use '*' so TrustedHostMiddleware
+# never blocks a legitimate Render-forwarded request.
+if os.environ.get("RENDER") or os.environ.get("RENDER_EXTERNAL_HOSTNAME"):
+    _allowed_hosts = ["*"]
+elif IS_PROD and all(h in {"localhost", "127.0.0.1", "0.0.0.0", "*.localhost"} for h in _allowed_hosts):
     logger.warning("No explicit production hostnames configured in ALLOWED_HOSTS. Allowing all hosts as fallback.")
-    _allowed_hosts.append("*")
+    _allowed_hosts = ["*"]
 
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=_allowed_hosts)
 # NOTE: Do NOT use HTTPSRedirectMiddleware on Render.  Render terminates TLS at
@@ -2474,6 +2489,147 @@ async def upload_file(file: UploadFile = File(...), _=Depends(require_owner_or_d
     return {"url": url, "content_type": detected_type, "size": len(data)}
 
 
+# ── Dubai Report ──────────────────────────────────────────────────────────────
+
+_DEFAULT_DUBAI_REPORT = {
+    "id": "dubai_report",
+    "title": "The Dubai Market Report 2003–2026",
+    "subtitle": "Two decades of real estate transformation — data-driven insights for the discerning investor.",
+    "edition": "2026 Edition",
+    "published_date": "July 2026",
+    "hero_image_url": "",
+    "brochure_image_url": "",
+    "brochure_download_url": "",
+    "highlights": [
+        {
+            "icon": "trending-up",
+            "label": "Total Transaction Volume",
+            "value": "AED 528B+",
+            "description": "Cumulative real estate transactions recorded across Dubai from 2003 to 2026.",
+        },
+        {
+            "icon": "bar-chart",
+            "label": "Price Growth (23 Years)",
+            "value": "+340%",
+            "description": "Average residential price appreciation since freehold ownership was introduced.",
+        },
+        {
+            "icon": "percent",
+            "label": "Peak Rental Yield",
+            "value": "9.8%",
+            "description": "Highest recorded net rental yield in prime Dubai communities (2025).",
+        },
+        {
+            "icon": "globe",
+            "label": "International Buyer Share",
+            "value": "68%",
+            "description": "Share of Dubai property transactions attributed to international investors in 2025.",
+        },
+    ],
+    "key_insights": [
+        "Dubai property prices have recovered +120% since the 2009 correction and now trade at all-time highs.",
+        "The off-plan segment represents 62% of all 2025 transactions, signaling strong developer confidence.",
+        "Rental demand from HNWI relocations grew 41% YoY as Dubai cements itself as a global wealth hub.",
+        "Average time-to-sell for prime properties dropped to just 18 days in Q1 2026 — a historic low.",
+    ],
+    "report_sections": [
+        {"title": "Market Overview 2003–2026", "pages": "pp. 1–18"},
+        {"title": "Price Trend Analysis by District", "pages": "pp. 19–42"},
+        {"title": "Rental Yield Benchmarking", "pages": "pp. 43–58"},
+        {"title": "Off-Plan Market Deep Dive", "pages": "pp. 59–74"},
+        {"title": "International Investment Flows", "pages": "pp. 75–88"},
+        {"title": "2026–2028 Outlook & Forecasts", "pages": "pp. 89–100"},
+    ],
+    "active": True,
+    "require_auth_for_download": True,
+    "cta_heading": "Access the Full Report",
+    "cta_subheading": "Register to download the complete 100-page report including proprietary market data, district maps, and analyst forecasts.",
+    "cta_button_label": "Download Full Report",
+}
+
+
+class DubaiReportUpdateIn(BaseModel):
+    """Admin payload to update the Dubai Report page content."""
+    title: Optional[str] = None
+    subtitle: Optional[str] = None
+    edition: Optional[str] = None
+    published_date: Optional[str] = None
+    hero_image_url: Optional[str] = None
+    brochure_image_url: Optional[str] = None
+    brochure_download_url: Optional[str] = None
+    highlights: Optional[list] = None
+    key_insights: Optional[list] = None
+    report_sections: Optional[list] = None
+    active: Optional[bool] = None
+    require_auth_for_download: Optional[bool] = None
+    cta_heading: Optional[str] = None
+    cta_subheading: Optional[str] = None
+    cta_button_label: Optional[str] = None
+
+
+class DubaiReportLeadIn(BaseModel):
+    """Registration lead for Dubai Report download."""
+    name: str = Field(..., min_length=1, max_length=120)
+    email: EmailStr
+    phone: Optional[str] = Field(None, max_length=30)
+    country: Optional[str] = Field(None, max_length=80)
+    message: Optional[str] = Field(None, max_length=500)
+
+
+@api_router.get("/dubai-report")
+async def get_dubai_report():
+    """Public endpoint — fetch the Dubai Report page content."""
+    stored = await db_find_one("settings", {"id": "dubai_report"})
+    if not stored:
+        return _DEFAULT_DUBAI_REPORT
+    return {**_DEFAULT_DUBAI_REPORT, **stored}
+
+
+@api_router.patch("/admin/dubai-report")
+async def update_dubai_report(payload: DubaiReportUpdateIn, user=Depends(require_owner_or_developer)):
+    """Admin endpoint — update Dubai Report page content."""
+    existing = await db_find_one("settings", {"id": "dubai_report"})
+    updates = {k: v for k, v in payload.model_dump().items() if v is not None}
+    updates["updated_at"] = now_iso()
+    updates["updated_by"] = user.get("email", "")
+
+    if existing:
+        await db_update("settings", "dubai_report", updates)
+    else:
+        await db_insert("settings", {"id": "dubai_report", **_DEFAULT_DUBAI_REPORT, **updates})
+
+    stored = await db_find_one("settings", {"id": "dubai_report"})
+    return {**_DEFAULT_DUBAI_REPORT, **(stored or {})}
+
+
+@api_router.post("/dubai-report/register", status_code=201)
+async def register_for_dubai_report(payload: DubaiReportLeadIn, request: Request):
+    """Public endpoint — register interest / request download access for the Dubai Report."""
+    doc = {
+        "id": str(uuid.uuid4()),
+        "organization_id": DEFAULT_ORG_ID,
+        "name": payload.name,
+        "email": str(payload.email),
+        "phone": payload.phone or "",
+        "country": payload.country or "",
+        "message": payload.message or "Dubai Report Download Request",
+        "source": "dubai_report",
+        "status": "new",
+        "created_at": now_iso(),
+        "ip": client_ip(request),
+    }
+    await db_insert("leads", doc)
+    return {"ok": True, "id": doc["id"], "message": "Registration successful. Your download link has been sent."}
+
+
+@api_router.get("/admin/dubai-report/leads")
+async def list_dubai_report_leads(user=Depends(require_owner_or_developer)):
+    """Admin endpoint — list all Dubai Report registration leads."""
+    all_leads = await db_find("leads", {"source": "dubai_report"})
+    all_leads.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+    return {"count": len(all_leads), "results": all_leads}
+
+
 app.include_router(api_router)
 
 # ----------------------------- Serve Static Frontend -----------------------------
@@ -2504,7 +2660,7 @@ async def serve_upload(filename: str):
 
 @app.get("/robots.txt")
 async def serve_robots():
-    site_url = os.getenv("SITE_URL", "https://www.triadrealty.ae").rstrip("/")
+    site_url = os.getenv("SITE_URL", "https://webtriad-9.onrender.com").rstrip("/")
     content = (
         "# Triad Realty - robots.txt\n\n"
         "User-agent: *\n"
@@ -2529,7 +2685,7 @@ async def serve_robots():
 @app.get("/sitemap.xml")
 async def serve_sitemap():
     # Base URL for sitemap loaded from environment variable SITE_URL
-    base_url = os.getenv("SITE_URL", "https://www.triadrealty.ae").rstrip("/")
+    base_url = os.getenv("SITE_URL", "https://webtriad-9.onrender.com").rstrip("/")
     current_date = datetime.now(timezone.utc).strftime('%Y-%m-%d')
 
     # Query all active database items dynamically
