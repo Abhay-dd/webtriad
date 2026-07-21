@@ -1,5 +1,5 @@
 #!/bin/bash
-# scripts/deploy.sh — Production Deployment Script for AWS EC2
+# scripts/deploy.sh — Legacy Docker Compose deployment script (not used on Render)
 set -e
 
 # Setup logging

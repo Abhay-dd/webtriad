@@ -33,11 +33,13 @@ export const resolveMediaUrl = (url) => {
   return url;
 };
 
-/** Base URL of the website for SEO, sitemaps, and canonical links. */
+/** Base URL of the website for SEO, sitemaps, and canonical links.
+ *  Defaults to the Render production URL when no env var is provided.
+ */
 export const SITE_URL = (
   process.env.REACT_APP_SITE_URL ||
   process.env.SITE_URL ||
   (typeof window !== "undefined" ? window.location.origin : "") ||
-  "https://www.triadrealty.ae"
+  "https://webtriad-9.onrender.com"
 ).replace(/\/$/, "");
 

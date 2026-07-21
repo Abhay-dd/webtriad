@@ -1,4 +1,4 @@
-name: Production Deployment to AWS EC2
+name: Deploy to Render
 
 on:
   push:
@@ -7,28 +7,17 @@ on:
 
 jobs:
   deploy:
-    name: Deploy to EC2
+    name: Trigger Render Deploy
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          port: 22
-          envs: JWT_SECRET,MONGO_URI,CLOUDINARY_CLOUD_NAME,CLOUDINARY_API_KEY,CLOUDINARY_API_SECRET,GITHUB_SHA
-          script: |
-            export JWT_SECRET="${{ secrets.JWT_SECRET }}"
-            export MONGO_URI="${{ secrets.MONGO_URI }}"
-            export CLOUDINARY_CLOUD_NAME="${{ secrets.CLOUDINARY_CLOUD_NAME }}"
-            export CLOUDINARY_API_KEY="${{ secrets.CLOUDINARY_API_KEY }}"
-            export CLOUDINARY_API_SECRET="${{ secrets.CLOUDINARY_API_SECRET }}"
-            export COMMIT_SHA="${{ github.sha }}"
-            
-            # Execute the deployment script on the target EC2 server
-            bash $HOME/webtriad-main/scripts/deploy.sh
+      - name: Trigger Render deploy hook
+        run: |
+          curl -f -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" \
+            -H "Accept: application/json" \
+            --silent --show-error
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}

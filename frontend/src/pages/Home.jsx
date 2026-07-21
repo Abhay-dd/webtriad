@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, ArrowUpRight, Phone, Mail, Star, Quote, Instagram, Linkedin, Facebook } from "lucide-react";
 import axios from "axios";
@@ -21,7 +21,14 @@ import {
 
 import { API_URL as API, resolveMediaUrl, SITE_URL } from "../config";
 
-const VIDEO_SRC = "https://res.cloudinary.com/dhxttgpfj/video/upload/v1783444338/WEBSITE_wg6h7g.mp4";
+// Phone (portrait) video — used when viewport width < 768 px
+const VIDEO_PHONE = "https://res.cloudinary.com/dhxttgpfj/video/upload/v1784666175/0707_1_1_yegyek.mp4";
+// Desktop / wider-screen video — used when viewport width >= 768 px
+const VIDEO_DESKTOP = "https://res.cloudinary.com/dhxttgpfj/video/upload/v1784666034/0707_1_1_wczzvk.mp4";
+
+/** Returns the correct video URL for the current viewport width. */
+const getVideoSrc = () =>
+  window.innerWidth < 768 ? VIDEO_PHONE : VIDEO_DESKTOP;
 
 const DEFAULT_HOMEPAGE_SETTINGS = {
   launch_title: "Why Triad Realty?",
@@ -52,6 +59,38 @@ export default function Home() {
   const [team, setTeam] = useState([]);
   const [homepageSettings, setHomepageSettings] = useState(DEFAULT_HOMEPAGE_SETTINGS);
   const [showBooking, setShowBooking] = useState(false);
+
+  // --- Responsive video source ---
+  const videoRef = useRef(null);
+  const currentSrcRef = useRef("");
+
+  const applyVideoSrc = useCallback(() => {
+    const next = getVideoSrc();
+    if (next === currentSrcRef.current) return; // no change needed
+    currentSrcRef.current = next;
+    const el = videoRef.current;
+    if (!el) return;
+    el.src = next;
+    el.load();   // reload so the new source starts
+    el.play().catch(() => {}); // autoplay after src swap
+  }, []);
+
+  useEffect(() => {
+    // Set initial source
+    applyVideoSrc();
+
+    // Watch for resize events (debounced at ~150 ms)
+    let timer;
+    const onResize = () => {
+      clearTimeout(timer);
+      timer = setTimeout(applyVideoSrc, 150);
+    };
+    window.addEventListener("resize", onResize, { passive: true });
+    return () => {
+      window.removeEventListener("resize", onResize);
+      clearTimeout(timer);
+    };
+  }, [applyVideoSrc]);
 
   useEffect(() => {
     let isMounted = true;
@@ -87,9 +126,9 @@ export default function Home() {
 
         {/* Founders Group Photo — full colour with text overlay */}
         <div className="w-full aspect-[21/9] overflow-hidden relative shadow-lg mb-12 img-zoom border border-white/10">
-          <img 
-            src={resolveMediaUrl(homepageSettings.founders_image_url)} 
-            alt="Three Founders of Triad Realty" 
+          <img
+            src={resolveMediaUrl(homepageSettings.founders_image_url)}
+            alt="Three Founders of Triad Realty"
             width={1200}
             height={514}
             loading="lazy"
@@ -105,88 +144,88 @@ export default function Home() {
             .filter((t) => t && t.name && t.tier !== "none" && t.showOnHome !== false)
             .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
             .map((t) => (
-            <div key={t.id || t.name} className="group" data-testid={`team-${t.name.toLowerCase().replace(/\s+/g, "-")}`}>
-              <div className="aspect-[3/4] img-zoom bg-[var(--surface-dark,#141414)] relative">
-                {t.photo ? (
-                  <img 
-                    src={resolveMediaUrl(t.photo)} 
-                    alt={`Triad Realty Consultant ${t.name}`} 
-                    width={300}
-                    height={400}
-                    loading="lazy"
-                    style={{ objectFit: "cover", objectPosition: "50% 30%" }} 
-                    className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700" 
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-white/5 text-white">
-                    <span className="font-display text-6xl text-[var(--gold)]">
-                      {t.name.split(" ").map((part) => part[0]).join("").slice(0, 2)}
-                    </span>
+              <div key={t.id || t.name} className="group" data-testid={`team-${t.name.toLowerCase().replace(/\s+/g, "-")}`}>
+                <div className="aspect-[3/4] img-zoom bg-[var(--surface-dark,#141414)] relative">
+                  {t.photo ? (
+                    <img
+                      src={resolveMediaUrl(t.photo)}
+                      alt={`Triad Realty Consultant ${t.name}`}
+                      width={300}
+                      height={400}
+                      loading="lazy"
+                      style={{ objectFit: "cover", objectPosition: "50% 30%" }}
+                      className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-white/5 text-white">
+                      <span className="font-display text-6xl text-[var(--gold)]">
+                        {t.name.split(" ").map((part) => part[0]).join("").slice(0, 2)}
+                      </span>
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                    <Link to={`/team/${t.id}`} className="btn-gold !px-6 !py-3">View More</Link>
                   </div>
-                )}
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-                   <Link to={`/team/${t.id}`} className="btn-gold !px-6 !py-3">View More</Link>
+                </div>
+                <h3 className="font-display text-2xl mt-5">{t.name}</h3>
+                <p className="overline opacity-60 mt-1">{t.role || "Property Consultant"}</p>
+                <div className="flex gap-2.5 mt-4 relative z-10">
+                  {t.phone && (
+                    <a
+                      href={toWhatsApp(t.phone)}
+                      target="_blank"
+                      rel="noreferrer"
+                      title="WhatsApp"
+                      className="w-8 h-8 flex items-center justify-center border border-white/20 hover:border-[var(--gold)] hover:text-[var(--gold)] text-white transition-colors"
+                    >
+                      <Phone size={13} />
+                    </a>
+                  )}
+                  {t.email && (
+                    <a
+                      href={`mailto:${t.email}`}
+                      title="Email"
+                      className="w-8 h-8 flex items-center justify-center border border-white/20 hover:border-[var(--gold)] hover:text-[var(--gold)] text-white transition-colors"
+                    >
+                      <Mail size={13} />
+                    </a>
+                  )}
+                  {t.instagram && (
+                    <a
+                      href={t.instagram}
+                      target="_blank"
+                      rel="noreferrer"
+                      title="Instagram"
+                      className="w-8 h-8 flex items-center justify-center border border-white/20 hover:border-[var(--gold)] hover:text-[var(--gold)] text-white transition-colors"
+                    >
+                      <Instagram size={13} />
+                    </a>
+                  )}
+                  {t.linkedin && (
+                    <a
+                      href={t.linkedin}
+                      target="_blank"
+                      rel="noreferrer"
+                      title="LinkedIn"
+                      className="w-8 h-8 flex items-center justify-center border border-white/20 hover:border-[var(--gold)] hover:text-[var(--gold)] text-white transition-colors"
+                    >
+                      <Linkedin size={13} />
+                    </a>
+                  )}
+                  {t.facebook && (
+                    <a
+                      href={t.facebook}
+                      target="_blank"
+                      rel="noreferrer"
+                      title="Facebook"
+                      className="w-8 h-8 flex items-center justify-center border border-white/20 hover:border-[var(--gold)] hover:text-[var(--gold)] text-white transition-colors"
+                    >
+                      <Facebook size={13} />
+                    </a>
+                  )}
                 </div>
               </div>
-              <h3 className="font-display text-2xl mt-5">{t.name}</h3>
-              <p className="overline opacity-60 mt-1">{t.role || "Property Consultant"}</p>
-              <div className="flex gap-2.5 mt-4 relative z-10">
-                {t.phone && (
-                  <a
-                    href={toWhatsApp(t.phone)}
-                    target="_blank"
-                    rel="noreferrer"
-                    title="WhatsApp"
-                    className="w-8 h-8 flex items-center justify-center border border-white/20 hover:border-[var(--gold)] hover:text-[var(--gold)] text-white transition-colors"
-                  >
-                    <Phone size={13} />
-                  </a>
-                )}
-                {t.email && (
-                  <a
-                    href={`mailto:${t.email}`}
-                    title="Email"
-                    className="w-8 h-8 flex items-center justify-center border border-white/20 hover:border-[var(--gold)] hover:text-[var(--gold)] text-white transition-colors"
-                  >
-                    <Mail size={13} />
-                  </a>
-                )}
-                {t.instagram && (
-                  <a
-                    href={t.instagram}
-                    target="_blank"
-                    rel="noreferrer"
-                    title="Instagram"
-                    className="w-8 h-8 flex items-center justify-center border border-white/20 hover:border-[var(--gold)] hover:text-[var(--gold)] text-white transition-colors"
-                  >
-                    <Instagram size={13} />
-                  </a>
-                )}
-                {t.linkedin && (
-                  <a
-                    href={t.linkedin}
-                    target="_blank"
-                    rel="noreferrer"
-                    title="LinkedIn"
-                    className="w-8 h-8 flex items-center justify-center border border-white/20 hover:border-[var(--gold)] hover:text-[var(--gold)] text-white transition-colors"
-                  >
-                    <Linkedin size={13} />
-                  </a>
-                )}
-                {t.facebook && (
-                  <a
-                    href={t.facebook}
-                    target="_blank"
-                    rel="noreferrer"
-                    title="Facebook"
-                    className="w-8 h-8 flex items-center justify-center border border-white/20 hover:border-[var(--gold)] hover:text-[var(--gold)] text-white transition-colors"
-                  >
-                    <Facebook size={13} />
-                  </a>
-                )}
-              </div>
-            </div>
-          ))}
+            ))}
         </div>
         <div className="mt-14 border-t border-white/20 pt-10 flex justify-between items-center">
           <h3 className="font-display text-3xl">Meet the full team</h3>
@@ -250,22 +289,23 @@ export default function Home() {
         <script type="application/ld+json">{JSON.stringify(websiteSchema)}</script>
       </Helmet>
 
-      {/* HERO — local video */}
+      {/* HERO — responsive video (phone vs desktop auto-detected) */}
       <section className="relative h-screen w-full overflow-hidden bg-[var(--ink)]" data-testid="home-hero">
         <div className="absolute inset-0">
           <video
+            ref={videoRef}
             autoPlay
             loop
             muted
             playsInline
             className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-auto max-h-full object-contain md:min-w-full md:min-h-full md:object-cover pointer-events-none"
             data-testid="hero-video"
-            src={VIDEO_SRC}
+            /* src is set imperatively via videoRef so no prop needed here */
           />
           {/* subtle dark overlay */}
           <div className="absolute inset-0 z-[2] bg-black/20" />
           {/* mobile-only: covers the in-video Triad award logo in portrait crop */}
-          <div className="absolute top-0 inset-x-0 z-[3] xl:hidden" style={{height: '80px', background: 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.95) 50%, rgba(0,0,0,0) 100%)'}} />
+          <div className="absolute top-0 inset-x-0 z-[3] xl:hidden" style={{ height: '80px', background: 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.95) 50%, rgba(0,0,0,0) 100%)' }} />
         </div>
 
         {/* Scroll cue */}
@@ -365,13 +405,13 @@ export default function Home() {
                 data-testid={`launch-card-${p.id}`}
               >
                 <div className="img-zoom aspect-[4/5] relative" data-reveal="zoom">
-                  <img 
-                    src={p.image} 
-                    alt={`${p.title} project by ${p.developer} in ${p.location}`} 
+                  <img
+                    src={p.image}
+                    alt={`${p.title} project by ${p.developer} in ${p.location}`}
                     width={400}
                     height={500}
                     loading="lazy"
-                    className="w-full h-full object-cover" 
+                    className="w-full h-full object-cover"
                   />
                   {p.isFeatured && (
                     <div className="absolute top-4 left-4 bg-[var(--ink)] text-[var(--gold)] overline px-3 py-1">
