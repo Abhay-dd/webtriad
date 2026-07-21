@@ -50,8 +50,8 @@ ENV MONGO_URI=mongodb+srv://king8637g4ff_db_user:Triad123456@triad-cluster.zfjnh
 ENV DB_NAME=triad_realty
 
 # Hosts & CORS
-ENV ALLOWED_HOSTS=www.triadrealty.ae,triadrealty.ae,localhost
-ENV CORS_ORIGINS=https://www.triadrealty.ae,https://triadrealty.ae
+ENV ALLOWED_HOSTS=webtriad-9.onrender.com,*.onrender.com,localhost,127.0.0.1
+ENV CORS_ORIGINS=https://webtriad-9.onrender.com
 
 # Cloudinary — persistent image storage
 ENV CLOUDINARY_CLOUD_NAME=dhxttgpfj

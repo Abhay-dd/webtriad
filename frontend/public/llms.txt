@@ -4,7 +4,7 @@ Triad Realty is a premier, client-centric real estate agency and property invest
 
 ## Website
 
-- **Official Website**: https://www.triadrealty.ae
+- **Official Website**: https://webtriad-9.onrender.com
 - **Primary Language**: English
 - **Country Served**: United Arab Emirates (UAE)
 - **Industry**: Real Estate (Brokerage & Investment Advisory)

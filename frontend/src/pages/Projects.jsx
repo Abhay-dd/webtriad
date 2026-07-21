@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import axios from "axios";
 import { Search, ArrowUpRight, Flame, ChevronLeft, ChevronRight, Wallet, Calendar } from "lucide-react";
 import { API_URL as API, resolveMediaUrl, SITE_URL } from "../config";
@@ -10,8 +10,8 @@ import { useAuth } from "../context/AuthContext";
 import BrochureModal from "../components/BrochureModal";
 
 const PAGE_SIZE = 6;
-const GATE_PAGE  = 4;           // pages from this number onward require a lead
-const GATE_KEY   = "triad_lead_unlocked"; // localStorage key
+const GATE_PAGE = 5;           // pages 5+ require a lead
+const GATE_KEY  = "triad_lead_unlocked"; // sessionStorage key
 
 export default function Projects() {
   const { user } = useAuth();
@@ -37,64 +37,68 @@ export default function Projects() {
   const [callbackOpen, setCallbackOpen] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState(null);
 
-  // ── Lead gate ──────────────────────────────────────────────────────────────
-  // Unlocked = user has already submitted a lead in this browser tab session
+  // ── Lead gate ───────────────────────────────────────────────────────────────
+  const navigate = useNavigate();
   const [gateUnlocked, setGateUnlocked] = useState(
     () => typeof window !== "undefined" && sessionStorage.getItem(GATE_KEY) === "1"
   );
-  const [gateOpen, setGateOpen]       = useState(false);
-  const [pendingPage, setPendingPage] = useState(null); // page to navigate to after unlock
-  const [pendingMap, setPendingMap]   = useState(false); // true = open map after unlock
+  const [gateOpen, setGateOpen]         = useState(false);
+  const [pendingAction, setPendingAction] = useState(null); // { type: "page"|"map"|"compare", payload? }
 
-  // Called when the gate modal closes (either via Close/X button or clicking backdrop)
-  const onGateClose = () => {
-    setGateOpen(false);
-    if (gateUnlocked) {
-      if (pendingPage !== null) { setPage(pendingPage); setPendingPage(null); }
-      if (pendingMap)           { openMap(); setPendingMap(false); }
+  const requireGate = (action) => {
+    if (gateUnlocked || user) {
+      runAction(action);
     } else {
-      setPendingPage(null);
-      setPendingMap(false);
+      setPendingAction(action);
+      setGateOpen(true);
     }
   };
 
-  // Called only when the lead form is successfully submitted.
-  // BrochureModal auto-closes when isGate+onSuccess are set, so we
-  // perform the pending navigation here immediately.
+  const runAction = (action) => {
+    if (!action) return;
+    if (action.type === "page")    setPage(action.payload);
+    if (action.type === "map")     window.open(MAP_URL, "_blank", "noopener,noreferrer");
+    if (action.type === "compare") navigate("/analysis");
+  };
+
   const onGateSuccess = () => {
     sessionStorage.setItem(GATE_KEY, "1");
     setGateUnlocked(true);
-    if (pendingPage !== null) { setPage(pendingPage); setPendingPage(null); }
-    if (pendingMap)           { openMap(); setPendingMap(false); }
     setGateOpen(false);
+    if (pendingAction) { runAction(pendingAction); setPendingAction(null); }
   };
+
+  const onGateClose = () => {
+    setGateOpen(false);
+    setPendingAction(null);
+  };
+  // ─────────────────────────────────────────────────────────────────────────────
 
   const MAP_URL =
     "https://triad-realty-ae.map.estate/en/map/uae-dubai/projects?selection=building_unit__price&top=all&collection=all_projects&buildingUnitAvailableForBooking&soldOut=false&cenLat=25.115655&cenLng=55.215378&zoom=11";
 
-  const openMap = () => window.open(MAP_URL, "_blank", "noopener,noreferrer");
-
-  const handleMapClick = (e) => {
-    e.preventDefault();
-    if (gateUnlocked || user) { openMap(); return; }
-    setPendingMap(true);
-    setGateOpen(true);
-  };
-
-  const handlePageChange = (n) => {
+  const handleMapClick     = (e) => { e.preventDefault(); requireGate({ type: "map" }); };
+  const handleCompareClick = (e) => { e.preventDefault(); requireGate({ type: "compare" }); };
+  const handlePageChange   = (n) => {
     if (n >= GATE_PAGE && !gateUnlocked && !user) {
-      setPendingPage(n);
-      setGateOpen(true);
-      return;
+      requireGate({ type: "page", payload: n });
+    } else {
+      setPage(n);
     }
-    setPage(n);
   };
+  // ─────────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     let isMounted = true;
 
     const applyItems = (rawItems) => {
-      const normalized = normalizeProperties(rawItems);
+      // Sort newest-first (highest id first)
+      const sorted = [...rawItems].sort((a, b) => {
+        const idA = Number(a.id) || 0;
+        const idB = Number(b.id) || 0;
+        return idB - idA;
+      });
+      const normalized = normalizeProperties(sorted);
       const options = buildFilterOptions(normalized);
       setAll(normalized);
       setFilterOptions(options);
@@ -402,16 +406,17 @@ export default function Projects() {
                 <button
                   onClick={handleMapClick}
                   className="btn-gold flex-1 justify-center text-center !py-3 text-sm font-medium tracking-wider uppercase"
-                  title={gateUnlocked ? "Open map" : "Submit your details to unlock the map"}
+                  title="Open interactive map"
                 >
                   Map
                 </button>
-                <Link
-                  to="/analysis"
+                <button
+                  onClick={handleCompareClick}
                   className="btn-ghost flex-1 justify-center text-center !py-3 text-sm font-medium tracking-wider uppercase"
+                  title="Compare projects"
                 >
                   Compare
-                </Link>
+                </button>
               </div>
             </div>
           </div>
@@ -538,7 +543,7 @@ export default function Projects() {
         asset="callback"
       />
 
-      {/* Lead Gate Modal — unlocks page 4+ and the map */}
+      {/* Lead Gate — unlocks Map, Compare, and pages 5+ */}
       <BrochureModal
         open={gateOpen}
         onClose={onGateClose}
@@ -547,6 +552,7 @@ export default function Projects() {
         asset="callback"
         isGate
       />
+
     </>
   );
 }

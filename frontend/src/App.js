@@ -30,6 +30,7 @@ const AdminLogin = lazy(() => import("./pages/admin/AdminLogin"));
 const DeveloperAdmin = lazy(() => import("./pages/admin/DeveloperAdmin"));
 const OwnerAdmin = lazy(() => import("./pages/admin/OwnerAdmin"));
 const StaffAdmin = lazy(() => import("./pages/admin/StaffAdmin"));
+const DubaiReport = lazy(() => import("./pages/DubaiReport"));
 
 function PageLoader() {
   return (
@@ -62,6 +63,7 @@ function App() {
               <Route path="/experience-immersive" element={<ExperienceImmersive />} />
               <Route path="/team" element={<TeamList />} />
               <Route path="/team/:id" element={<TeamMember />} />
+              <Route path="/dubai-report" element={<DubaiReport />} />
               <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
               <Route path="/admin/login" element={<AdminLogin />} />
               <Route

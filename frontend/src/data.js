@@ -7,8 +7,10 @@ export const NAV = [
   // { label: "Experience", to: "/gallery" },
   { label: "Blogs", to: "/blogs" },
   { label: "Careers", to: "/careers" },
+  { label: "Dubai Report", to: "/dubai-report" },
   { label: "Contact", to: "/contact" },
 ];
+
 
 export const COMPANY = {
   name: "Triad Realty",

@@ -73,7 +73,7 @@ function FileUploadButton({ onUploadSuccess, label = "Upload File" }) {
   );
 }
 
-const TABS = ["team", "owners", "projects", "blogs", "home", "popup", "reviews", "status"];
+const TABS = ["team", "owners", "projects", "blogs", "home", "popup", "reviews", "dubaiReport", "status"];
 
 // ── Sortable row component for drag-and-drop team reordering ──────────────────
 function SortableTeamRow({ member, onEdit, onDelete }) {
@@ -163,6 +163,7 @@ const TAB_LABELS = {
   home: "Home",
   popup: "Popup",
   reviews: "Reviews",
+  dubaiReport: "Dubai Report",
   status: "⚡ Status",
 };
 
@@ -306,6 +307,18 @@ export default function DeveloperAdmin() {
     testimonials_title: "",
     average_rating: 4.9,
   });
+  const [dubaiReportForm, setDubaiReportForm] = useState({
+    title: "",
+    subtitle: "",
+    edition: "",
+    published_date: "",
+    hero_image_url: "",
+    brochure_image_url: "",
+    brochure_download_url: "",
+    highlights: [],
+    key_insights: [],
+    report_sections: [],
+  });
   const [actionError, setActionError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -323,7 +336,7 @@ export default function DeveloperAdmin() {
   const load = async () => {
     setLoading(true);
     try {
-      const [t, o, p, b, h, pop, home, r, cons, revSet] = await Promise.all([
+      const [t, o, p, b, h, pop, home, r, cons, revSet, dubRep] = await Promise.all([
         apiClient.get("/team"),
         apiClient.get("/admin/owners"),
         apiClient.get("/admin/projects"),
@@ -334,6 +347,7 @@ export default function DeveloperAdmin() {
         apiClient.get("/reviews"),
         apiClient.get("/admin/consultations").catch(() => ({ data: { results: [] } })),
         apiClient.get("/settings/reviews").catch(() => ({ data: null })),
+        apiClient.get("/dubai-report").catch(() => ({ data: null })),
       ]);
       setTeam(t.data.results || []);
       setOwners(o.data.results || []);
@@ -386,6 +400,20 @@ export default function DeveloperAdmin() {
           hero_description: revSet.data.hero_description || "",
           testimonials_title: revSet.data.testimonials_title || "",
           average_rating: revSet.data.average_rating ?? 4.9,
+        });
+      }
+      if (dubRep && dubRep.data) {
+        setDubaiReportForm({
+          title: dubRep.data.title || "",
+          subtitle: dubRep.data.subtitle || "",
+          edition: dubRep.data.edition || "",
+          published_date: dubRep.data.published_date || "",
+          hero_image_url: dubRep.data.hero_image_url || "",
+          brochure_image_url: dubRep.data.brochure_image_url || "",
+          brochure_download_url: dubRep.data.brochure_download_url || "",
+          highlights: dubRep.data.highlights || [],
+          key_insights: dubRep.data.key_insights || [],
+          report_sections: dubRep.data.report_sections || [],
         });
       }
     } catch {
@@ -899,6 +927,57 @@ export default function DeveloperAdmin() {
       setActionError(err.response?.data?.detail || "Failed to update reviews page settings");
     }
     setSaving(false);
+  };
+
+  const saveDubaiReportSettings = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setActionError("");
+    try {
+      const res = await apiClient.patch("/admin/dubai-report", dubaiReportForm);
+      if (res.data) {
+        setDubaiReportForm({
+          title: res.data.title || "",
+          subtitle: res.data.subtitle || "",
+          edition: res.data.edition || "",
+          published_date: res.data.published_date || "",
+          hero_image_url: res.data.hero_image_url || "",
+          brochure_image_url: res.data.brochure_image_url || "",
+          brochure_download_url: res.data.brochure_download_url || "",
+          highlights: res.data.highlights || [],
+          key_insights: res.data.key_insights || [],
+          report_sections: res.data.report_sections || [],
+        });
+        alert("Dubai Report settings updated successfully!");
+      }
+    } catch (err) {
+      setActionError(err.response?.data?.detail || "Failed to update Dubai Report settings");
+    }
+    setSaving(false);
+  };
+
+  const updateHighlight = (index, field, value) => {
+    setDubaiReportForm((prev) => {
+      const copy = [...prev.highlights];
+      copy[index] = { ...copy[index], [field]: value };
+      return { ...prev, highlights: copy };
+    });
+  };
+
+  const updateInsight = (index, value) => {
+    setDubaiReportForm((prev) => {
+      const copy = [...prev.key_insights];
+      copy[index] = value;
+      return { ...prev, key_insights: copy };
+    });
+  };
+
+  const updateSection = (index, field, value) => {
+    setDubaiReportForm((prev) => {
+      const copy = [...prev.report_sections];
+      copy[index] = { ...copy[index], [field]: value };
+      return { ...prev, report_sections: copy };
+    });
   };
 
   return (
@@ -1693,6 +1772,236 @@ export default function DeveloperAdmin() {
                   </button>
                 </form>
               </>
+            )}
+            {tab === "dubaiReport" && (
+              <form onSubmit={saveDubaiReportSettings} className="bg-white p-8 border border-[var(--line)] space-y-6 max-w-4xl">
+                <h2 className="font-display text-2xl font-semibold">Dubai Report Page Settings</h2>
+                <p className="text-xs text-[var(--muted)] -mt-4">
+                  Manage the details, brochure preview, and brochure download PDF for the Dubai Market Report page.
+                </p>
+
+                {/* General Settings Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-xs uppercase tracking-widest text-[var(--muted)] mb-2">Report Title</label>
+                    <input
+                      type="text"
+                      required
+                      className="w-full border border-[var(--line)] p-2.5 text-sm focus:outline-none focus:border-[var(--gold)]"
+                      value={dubaiReportForm.title}
+                      onChange={(e) => setDubaiReportForm({ ...dubaiReportForm, title: e.target.value })}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs uppercase tracking-widest text-[var(--muted)] mb-2">Edition Description</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. 2026 Edition"
+                      className="w-full border border-[var(--line)] p-2.5 text-sm focus:outline-none focus:border-[var(--gold)]"
+                      value={dubaiReportForm.edition}
+                      onChange={(e) => setDubaiReportForm({ ...dubaiReportForm, edition: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-xs uppercase tracking-widest text-[var(--muted)] mb-2">Subtitle / Hero Hook</label>
+                    <textarea
+                      required
+                      rows={2}
+                      className="w-full border border-[var(--line)] p-2.5 text-sm focus:outline-none focus:border-[var(--gold)]"
+                      value={dubaiReportForm.subtitle}
+                      onChange={(e) => setDubaiReportForm({ ...dubaiReportForm, subtitle: e.target.value })}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs uppercase tracking-widest text-[var(--muted)] mb-2">Published Date Text</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. July 2026"
+                      className="w-full border border-[var(--line)] p-2.5 text-sm focus:outline-none focus:border-[var(--gold)]"
+                      value={dubaiReportForm.published_date}
+                      onChange={(e) => setDubaiReportForm({ ...dubaiReportForm, published_date: e.target.value })}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs uppercase tracking-widest text-[var(--muted)] mb-2">Hero Image URL</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Leave blank for default hero image"
+                        className="flex-1 border border-[var(--line)] p-2.5 text-sm focus:outline-none focus:border-[var(--gold)]"
+                        value={dubaiReportForm.hero_image_url}
+                        onChange={(e) => setDubaiReportForm({ ...dubaiReportForm, hero_image_url: e.target.value })}
+                      />
+                      <FileUploadButton
+                        label="Upload Hero"
+                        onUploadSuccess={(url) => setDubaiReportForm({ ...dubaiReportForm, hero_image_url: url })}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs uppercase tracking-widest text-[var(--muted)] mb-2">Brochure Preview Image URL</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Leave blank for generated mockup"
+                        className="flex-1 border border-[var(--line)] p-2.5 text-sm focus:outline-none focus:border-[var(--gold)]"
+                        value={dubaiReportForm.brochure_image_url}
+                        onChange={(e) => setDubaiReportForm({ ...dubaiReportForm, brochure_image_url: e.target.value })}
+                      />
+                      <FileUploadButton
+                        label="Upload Image"
+                        onUploadSuccess={(url) => setDubaiReportForm({ ...dubaiReportForm, brochure_image_url: url })}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs uppercase tracking-widest text-[var(--muted)] mb-2">Brochure PDF Download File</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Brochure PDF / file link"
+                        className="flex-1 border border-[var(--line)] p-2.5 text-sm focus:outline-none focus:border-[var(--gold)]"
+                        value={dubaiReportForm.brochure_download_url}
+                        onChange={(e) => setDubaiReportForm({ ...dubaiReportForm, brochure_download_url: e.target.value })}
+                      />
+                      <FileUploadButton
+                        label="Upload PDF"
+                        onUploadSuccess={(url) => setDubaiReportForm({ ...dubaiReportForm, brochure_download_url: url })}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <hr className="border-[var(--line)]" />
+
+                {/* Highlights section */}
+                <div>
+                  <h3 className="font-display text-lg font-semibold mb-3">Highlights (4 Key Stats)</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {(dubaiReportForm.highlights || []).map((h, i) => (
+                      <div key={i} className="border border-[var(--line)] p-4 space-y-3 bg-[var(--bg-alt)]">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs uppercase tracking-widest font-semibold text-[var(--gold-deep)]">Stat Card {i + 1}</span>
+                          <select
+                            className="border border-[var(--line)] p-1 text-xs focus:outline-none"
+                            value={h.icon}
+                            onChange={(e) => updateHighlight(i, "icon", e.target.value)}
+                          >
+                            <option value="trending-up">Trending Up</option>
+                            <option value="bar-chart">Bar Chart</option>
+                            <option value="percent">Percent</option>
+                            <option value="globe">Globe</option>
+                            <option value="file-text">File Text</option>
+                            <option value="star">Star</option>
+                            <option value="shield">Shield</option>
+                          </select>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[10px] uppercase tracking-widest text-[var(--muted)]">Value (e.g. AED 528B+)</label>
+                            <input
+                              type="text"
+                              required
+                              className="w-full border border-[var(--line)] p-1.5 text-xs focus:outline-none"
+                              value={h.value}
+                              onChange={(e) => updateHighlight(i, "value", e.target.value)}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] uppercase tracking-widest text-[var(--muted)]">Label (e.g. Total Volume)</label>
+                            <input
+                              type="text"
+                              required
+                              className="w-full border border-[var(--line)] p-1.5 text-xs focus:outline-none"
+                              value={h.label}
+                              onChange={(e) => updateHighlight(i, "label", e.target.value)}
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] uppercase tracking-widest text-[var(--muted)]">Description</label>
+                          <input
+                            type="text"
+                            required
+                            className="w-full border border-[var(--line)] p-1.5 text-xs focus:outline-none"
+                            value={h.description}
+                            onChange={(e) => updateHighlight(i, "description", e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <hr className="border-[var(--line)]" />
+
+                {/* Key Insights section */}
+                <div>
+                  <h3 className="font-display text-lg font-semibold mb-3">Key Insights Checklist (4 Bullet Points)</h3>
+                  <div className="space-y-3">
+                    {(dubaiReportForm.key_insights || []).map((insight, i) => (
+                      <div key={i} className="flex gap-2 items-center">
+                        <span className="text-xs text-[var(--muted)] font-mono w-6">#{i+1}</span>
+                        <input
+                          type="text"
+                          required
+                          className="flex-1 border border-[var(--line)] p-2 text-sm focus:outline-none focus:border-[var(--gold)]"
+                          value={insight}
+                          onChange={(e) => updateInsight(i, e.target.value)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <hr className="border-[var(--line)]" />
+
+                {/* Report Chapters section */}
+                <div>
+                  <h3 className="font-display text-lg font-semibold mb-3">Report Chapters / Sections (6 Rows)</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {(dubaiReportForm.report_sections || []).map((sec, i) => (
+                      <div key={i} className="flex gap-2 items-center border border-[var(--line)] p-3 bg-[var(--bg-alt)]">
+                        <span className="text-xs text-[var(--muted)] font-mono">#{i+1}</span>
+                        <div className="flex-1">
+                          <label className="block text-[9px] uppercase tracking-widest text-[var(--muted)]">Chapter Title</label>
+                          <input
+                            type="text"
+                            required
+                            className="w-full border border-[var(--line)] p-1.5 text-xs focus:outline-none"
+                            value={sec.title}
+                            onChange={(e) => updateSection(i, "title", e.target.value)}
+                          />
+                        </div>
+                        <div className="w-24">
+                          <label className="block text-[9px] uppercase tracking-widest text-[var(--muted)]">Pages (e.g. pp. 1-18)</label>
+                          <input
+                            type="text"
+                            required
+                            className="w-full border border-[var(--line)] p-1.5 text-xs focus:outline-none"
+                            value={sec.pages}
+                            onChange={(e) => updateSection(i, "pages", e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <button type="submit" disabled={saving} className="btn-gold !px-8 !py-3">
+                    {saving ? "Saving Settings..." : "Save Dubai Report Settings"}
+                  </button>
+                </div>
+              </form>
             )}
             {tab === "status" && (
               <div className="space-y-8">
