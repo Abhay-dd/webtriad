@@ -459,7 +459,7 @@ export default function DubaiReport() {
 
   const brochureImage =
     (report?.brochure_image_url && resolveMediaUrl(report.brochure_image_url)) ||
-    "/dubai_report_brochure.png";
+    "https://res.cloudinary.com/dhxttgpfj/image/upload/v1722423340/triad-realty/dubai_report_brochure.png";
 
   return (
     <>
