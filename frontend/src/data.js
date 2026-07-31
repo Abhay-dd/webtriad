@@ -29,7 +29,7 @@ export const MILESTONES = [
   { year: "Q4 2025", label: "Expanded the Team to 30 Members" },
   { year: "Q1 2026", label: "Launched Our In-House Market Research Desk Crossed AED 100M in Sales" },
   { year: "Q2 2026", label: "Achieved AED 200M+ in sales Served 80+ Investors" },
-  { year: "Q3 2026", label: "Expended the Team to 53 Members" },
+  { year: "Q3 2026", label: "Expanded the Team to 53 Members" },
 ];
  
 export const FOUNDERS = [];

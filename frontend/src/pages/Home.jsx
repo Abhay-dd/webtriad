@@ -125,17 +125,18 @@ export default function Home() {
         </div>
 
         {/* Founders Group Photo — full colour with text overlay */}
-        <div className="w-full aspect-[21/9] overflow-hidden relative shadow-lg mb-12 img-zoom border border-white/10">
+        <div className="w-full aspect-[4/3] sm:aspect-[16/9] md:aspect-[21/9] overflow-hidden relative shadow-lg mb-12 img-zoom border border-white/10">
           <img
             src={resolveMediaUrl(homepageSettings.founders_image_url)}
             alt="Three Founders of Triad Realty"
             width={1200}
             height={514}
             loading="lazy"
+            style={{ objectFit: "cover", objectPosition: "50% 20%" }}
             className="w-full h-full object-cover transition-all duration-700"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent flex items-end p-8 md:p-12">
-            <h2 className="font-display text-4xl md:text-5xl text-white">Three founders. One conviction.</h2>
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex items-end p-5 sm:p-8 md:p-12">
+            <h2 className="font-display text-2xl sm:text-4xl md:text-5xl text-white">Three founders. One conviction.</h2>
           </div>
         </div>
 

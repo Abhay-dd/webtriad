@@ -77,10 +77,10 @@
   position: absolute;
   inset: 0;
   background: linear-gradient(
-    135deg,
-    rgba(5, 8, 20, 0.92) 0%,
-    rgba(10, 10, 10, 0.82) 50%,
-    rgba(8, 15, 30, 0.75) 100%
+    180deg,
+    rgba(5, 8, 20, 0.70) 0%,
+    rgba(10, 10, 10, 0.50) 45%,
+    rgba(5, 8, 20, 0.88) 100%
   );
 }
 
@@ -624,9 +624,61 @@
   width: 100%;
 }
 
-.dr-reg-field input:focus {
+.dr-reg-field input:focus,
+.dr-reg-field select:focus {
   border-color: var(--gold);
   box-shadow: 0 0 0 3px rgba(197, 160, 89, 0.1);
+}
+
+/* Country & dial code select styling */
+.dr-reg-field select,
+.dr-country-select,
+.dr-dial-select {
+  background: var(--bg-alt);
+  border: 1px solid var(--line);
+  padding: 0.7rem 0.9rem;
+  font-size: 0.875rem;
+  color: var(--ink);
+  font-family: "Outfit", sans-serif;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+  outline: none;
+  border-radius: 2px;
+  width: 100%;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2rem;
+}
+
+/* Phone number group: dial code dropdown + input side by side */
+.dr-phone-group {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  width: 100%;
+}
+
+.dr-reg-field select.dr-dial-select {
+  flex: 0 0 110px !important;
+  width: 110px !important;
+  min-width: 110px !important;
+  max-width: 110px !important;
+  border-radius: 2px 0 0 2px !important;
+  border-right: none !important;
+  padding: 0.7rem 0.4rem !important;
+  padding-right: 1.5rem !important;
+  font-size: 0.85rem !important;
+  background-position: right 0.35rem center !important;
+}
+
+.dr-reg-field input.dr-phone-input {
+  flex: 1 1 auto !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  border-radius: 0 2px 2px 0 !important;
 }
 
 .dr-reg-error {
@@ -825,6 +877,162 @@
   font-size: 0.78rem;
   color: rgba(255, 255, 255, 0.4);
   line-height: 1.5;
+}
+
+/* ============================================================
+   PAGE PREVIEW CAROUSEL
+   ============================================================ */
+.dr-page-preview {
+  padding: 5rem 5%;
+  background: var(--ink);
+  overflow: hidden;
+}
+
+.dr-page-preview-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.dr-page-preview-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 2.5rem;
+}
+
+.dr-page-preview-title {
+  font-family: "Outfit", sans-serif;
+  font-weight: 300;
+  font-size: clamp(1.8rem, 3.5vw, 2.8rem);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: #fff;
+  margin: 0;
+}
+
+.dr-page-preview-nav {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.dr-carousel-btn {
+  width: 42px;
+  height: 42px;
+  border-radius: 2px;
+  border: 1px solid rgba(197, 160, 89, 0.3);
+  background: rgba(197, 160, 89, 0.08);
+  color: var(--gold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.dr-carousel-btn:hover:not(:disabled) {
+  background: rgba(197, 160, 89, 0.2);
+  border-color: var(--gold);
+}
+
+.dr-carousel-btn:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+
+.dr-page-carousel {
+  display: flex;
+  gap: 1.25rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding-bottom: 0.5rem;
+}
+
+.dr-page-carousel::-webkit-scrollbar {
+  display: none;
+}
+
+.dr-page-slide {
+  flex: 0 0 auto;
+  width: 720px;
+  scroll-snap-align: start;
+  position: relative;
+  border: 1px solid rgba(197, 160, 89, 0.12);
+  background: #0a0a0a;
+  transition: transform 0.35s ease, box-shadow 0.35s ease;
+}
+
+.dr-page-slide:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+}
+
+.dr-page-slide-img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.dr-page-slide-num {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 0.5rem 0.75rem;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--gold);
+  text-align: right;
+}
+
+/* CTA last slide */
+.dr-page-slide-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 380px;
+  background: linear-gradient(135deg, rgba(197, 160, 89, 0.06) 0%, rgba(10, 10, 10, 0.95) 100%);
+  border: 1px dashed rgba(197, 160, 89, 0.25);
+}
+
+.dr-page-slide-cta:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.dr-page-cta-inner {
+  text-align: center;
+  padding: 2rem;
+}
+
+.dr-page-cta-text {
+  font-family: "Outfit", sans-serif;
+  font-size: 1rem;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 0.25rem;
+}
+
+@media (max-width: 768px) {
+  .dr-page-slide {
+    width: 480px;
+  }
+
+  .dr-page-preview-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .dr-page-slide {
+    width: 340px;
+  }
 }
 
 /* ============================================================

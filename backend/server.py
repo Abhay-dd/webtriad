@@ -2497,8 +2497,8 @@ _DEFAULT_DUBAI_REPORT = {
     "subtitle": "Two decades of real estate transformation — data-driven insights for the discerning investor.",
     "edition": "2026 Edition",
     "published_date": "July 2026",
-    "hero_image_url": "",
-    "brochure_image_url": "",
+    "hero_image_url": "https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&w=2000&q=85",
+    "brochure_image_url": "/dubai_report_brochure.png",
     "brochure_download_url": "",
     "highlights": [
         {

@@ -15,6 +15,7 @@ import {
   BookOpen,
   CheckCircle,
   ArrowRight,
+  ChevronLeft,
   ChevronRight,
   Loader2,
   FileText,
@@ -26,6 +27,14 @@ import {
   MapPin,
   AlertCircle,
 } from "lucide-react";
+
+// Preview page images extracted from the PDF
+const PREVIEW_PAGES = Array.from({ length: 8 }, (_, i) => ({
+  src: `/dubai_report_pages/page_${i + 1}.png`,
+  alt: `Dubai Report page ${i + 1}`,
+}));
+
+const REPORT_PDF_URL = "/dubai_report.pdf";
 import { useAuth } from "../context/AuthContext";
 import { API_URL, SITE_URL, resolveMediaUrl } from "../config";
 import Breadcrumbs from "../components/Breadcrumbs";
@@ -77,9 +86,63 @@ function CounterValue({ value }) {
   );
 }
 
+// ── Country + dial code data ───────────────────────────────────────────────────
+const COUNTRIES = [
+  { name: "United Arab Emirates", code: "AE", dial: "+971", flag: "🇦🇪" },
+  { name: "India", code: "IN", dial: "+91", flag: "🇮🇳" },
+  { name: "United States", code: "US", dial: "+1", flag: "🇺🇸" },
+  { name: "United Kingdom", code: "GB", dial: "+44", flag: "🇬🇧" },
+  { name: "Saudi Arabia", code: "SA", dial: "+966", flag: "🇸🇦" },
+  { name: "Qatar", code: "QA", dial: "+974", flag: "🇶🇦" },
+  { name: "Kuwait", code: "KW", dial: "+965", flag: "🇰🇼" },
+  { name: "Bahrain", code: "BH", dial: "+973", flag: "🇧🇭" },
+  { name: "Oman", code: "OM", dial: "+968", flag: "🇴🇲" },
+  { name: "Pakistan", code: "PK", dial: "+92", flag: "🇵🇰" },
+  { name: "Bangladesh", code: "BD", dial: "+880", flag: "🇧🇩" },
+  { name: "Philippines", code: "PH", dial: "+63", flag: "🇵🇭" },
+  { name: "Egypt", code: "EG", dial: "+20", flag: "🇪🇬" },
+  { name: "Jordan", code: "JO", dial: "+962", flag: "🇯🇴" },
+  { name: "Lebanon", code: "LB", dial: "+961", flag: "🇱🇧" },
+  { name: "Canada", code: "CA", dial: "+1", flag: "🇨🇦" },
+  { name: "Australia", code: "AU", dial: "+61", flag: "🇦🇺" },
+  { name: "Germany", code: "DE", dial: "+49", flag: "🇩🇪" },
+  { name: "France", code: "FR", dial: "+33", flag: "🇫🇷" },
+  { name: "Italy", code: "IT", dial: "+39", flag: "🇮🇹" },
+  { name: "Spain", code: "ES", dial: "+34", flag: "🇪🇸" },
+  { name: "Netherlands", code: "NL", dial: "+31", flag: "🇳🇱" },
+  { name: "Switzerland", code: "CH", dial: "+41", flag: "🇨🇭" },
+  { name: "Russia", code: "RU", dial: "+7", flag: "🇷🇺" },
+  { name: "China", code: "CN", dial: "+86", flag: "🇨🇳" },
+  { name: "Japan", code: "JP", dial: "+81", flag: "🇯🇵" },
+  { name: "South Korea", code: "KR", dial: "+82", flag: "🇰🇷" },
+  { name: "Singapore", code: "SG", dial: "+65", flag: "🇸🇬" },
+  { name: "Malaysia", code: "MY", dial: "+60", flag: "🇲🇾" },
+  { name: "Indonesia", code: "ID", dial: "+62", flag: "🇮🇩" },
+  { name: "Thailand", code: "TH", dial: "+66", flag: "🇹🇭" },
+  { name: "South Africa", code: "ZA", dial: "+27", flag: "🇿🇦" },
+  { name: "Nigeria", code: "NG", dial: "+234", flag: "🇳🇬" },
+  { name: "Kenya", code: "KE", dial: "+254", flag: "🇰🇪" },
+  { name: "Brazil", code: "BR", dial: "+55", flag: "🇧🇷" },
+  { name: "Mexico", code: "MX", dial: "+52", flag: "🇲🇽" },
+  { name: "Turkey", code: "TR", dial: "+90", flag: "🇹🇷" },
+  { name: "Iran", code: "IR", dial: "+98", flag: "🇮🇷" },
+  { name: "Iraq", code: "IQ", dial: "+964", flag: "🇮🇶" },
+  { name: "New Zealand", code: "NZ", dial: "+64", flag: "🇳🇿" },
+  { name: "Sri Lanka", code: "LK", dial: "+94", flag: "🇱🇰" },
+  { name: "Nepal", code: "NP", dial: "+977", flag: "🇳🇵" },
+  { name: "Sweden", code: "SE", dial: "+46", flag: "🇸🇪" },
+  { name: "Norway", code: "NO", dial: "+47", flag: "🇳🇴" },
+  { name: "Denmark", code: "DK", dial: "+45", flag: "🇩🇰" },
+  { name: "Portugal", code: "PT", dial: "+351", flag: "🇵🇹" },
+  { name: "Poland", code: "PL", dial: "+48", flag: "🇵🇱" },
+  { name: "Belgium", code: "BE", dial: "+32", flag: "🇧🇪" },
+  { name: "Austria", code: "AT", dial: "+43", flag: "🇦🇹" },
+  { name: "Ireland", code: "IE", dial: "+353", flag: "🇮🇪" },
+];
+
 // ── Registration / Download form ───────────────────────────────────────────────
 function RegistrationForm({ reportData, user, onSuccess }) {
-  const [form, setForm] = useState({ name: "", email: "", phone: "", country: "" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", country: "", dialCode: "+971" });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -98,12 +161,43 @@ function RegistrationForm({ reportData, user, onSuccess }) {
     setError("");
   };
 
+  // When country dropdown changes, auto-set the dial code
+  const handleCountryChange = (e) => {
+    const selectedCountry = e.target.value;
+    const match = COUNTRIES.find((c) => c.name === selectedCountry);
+    setForm((f) => ({
+      ...f,
+      country: selectedCountry,
+      dialCode: match ? match.dial : f.dialCode,
+    }));
+    setError("");
+  };
+
+  // When dial code dropdown changes, auto-set the country
+  const handleDialCodeChange = (e) => {
+    const selectedDial = e.target.value;
+    const match = COUNTRIES.find((c) => c.dial === selectedDial);
+    setForm((f) => ({
+      ...f,
+      dialCode: selectedDial,
+      country: match ? match.name : f.country,
+    }));
+    setError("");
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
     setError("");
     try {
-      await axios.post(`${API_URL}/dubai-report/register`, form);
+      // Combine dial code + phone number for submission
+      const fullPhone = form.phone ? `${form.dialCode} ${form.phone}` : "";
+      await axios.post(`${API_URL}/dubai-report/register`, {
+        name: form.name,
+        email: form.email,
+        phone: fullPhone,
+        country: form.country,
+      });
       onSuccess();
     } catch (err) {
       setError(
@@ -114,6 +208,11 @@ function RegistrationForm({ reportData, user, onSuccess }) {
     }
   };
 
+  // Deduplicated dial codes for the dropdown (some countries share codes like +1)
+  const uniqueDialCodes = COUNTRIES.reduce((acc, c) => {
+    if (!acc.find((x) => x.dial === c.dial)) acc.push(c);
+    return acc;
+  }, []);
 
   return (
     <form
@@ -157,28 +256,50 @@ function RegistrationForm({ reportData, user, onSuccess }) {
             <Phone size={13} className="inline mr-1" />
             Phone Number
           </label>
-          <input
-            id="dr-phone"
-            name="phone"
-            type="tel"
-            placeholder="+971 50 000 0000"
-            value={form.phone}
-            onChange={handleChange}
-          />
+          <div className="dr-phone-group">
+            <select
+              id="dr-dial-code"
+              className="dr-dial-select"
+              value={form.dialCode}
+              onChange={handleDialCodeChange}
+            >
+              {uniqueDialCodes.map((c) => (
+                <option key={c.code} value={c.dial}>
+                  {c.flag} {c.dial}
+                </option>
+              ))}
+            </select>
+            <input
+              id="dr-phone"
+              name="phone"
+              type="tel"
+              placeholder="50 000 0000"
+              value={form.phone}
+              onChange={handleChange}
+              className="dr-phone-input"
+            />
+          </div>
         </div>
         <div className="dr-reg-field">
           <label htmlFor="dr-country">
             <MapPin size={13} className="inline mr-1" />
             Country
           </label>
-          <input
+          <select
             id="dr-country"
             name="country"
-            type="text"
-            placeholder="United Arab Emirates"
             value={form.country}
-            onChange={handleChange}
-          />
+            onChange={handleCountryChange}
+            className="dr-country-select"
+            required
+          >
+            <option value="" disabled>Select country</option>
+            {COUNTRIES.map((c) => (
+              <option key={c.code} value={c.name}>
+                {c.flag} {c.name}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -215,6 +336,94 @@ function RegistrationForm({ reportData, user, onSuccess }) {
   );
 }
 
+// ── Page Preview Carousel ──────────────────────────────────────────────────────
+function PagePreviewCarousel() {
+  const scrollRef = useRef(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
+
+  const checkScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 10);
+    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 10);
+  };
+
+  const scroll = (direction) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const amount = el.clientWidth * 0.7;
+    el.scrollBy({ left: direction === "left" ? -amount : amount, behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    checkScroll();
+    el.addEventListener("scroll", checkScroll, { passive: true });
+    window.addEventListener("resize", checkScroll);
+    return () => {
+      el.removeEventListener("scroll", checkScroll);
+      window.removeEventListener("resize", checkScroll);
+    };
+  }, []);
+
+  return (
+    <section className="dr-page-preview" aria-label="Report page preview">
+      <div className="dr-page-preview-inner">
+        <div className="dr-page-preview-header">
+          <div>
+            <div className="dr-section-label">Report Preview</div>
+            <h2 className="dr-page-preview-title">Browse the Report</h2>
+          </div>
+          <div className="dr-page-preview-nav">
+            <button
+              className="dr-carousel-btn"
+              onClick={() => scroll("left")}
+              disabled={!canScrollLeft}
+              aria-label="Previous pages"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <button
+              className="dr-carousel-btn"
+              onClick={() => scroll("right")}
+              disabled={!canScrollRight}
+              aria-label="Next pages"
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
+        </div>
+        <div className="dr-page-carousel" ref={scrollRef}>
+          {PREVIEW_PAGES.map((page, i) => (
+            <div key={i} className="dr-page-slide">
+              <img
+                src={page.src}
+                alt={page.alt}
+                loading="lazy"
+                className="dr-page-slide-img"
+              />
+              <div className="dr-page-slide-num">Page {i + 1}</div>
+            </div>
+          ))}
+          {/* Fade-out card prompting download */}
+          <div className="dr-page-slide dr-page-slide-cta">
+            <div className="dr-page-cta-inner">
+              <Lock size={28} className="text-[var(--gold)] mb-3" />
+              <div className="dr-page-cta-text">Register to view all 45 pages</div>
+              <a href="#dr-register" className="btn-gold !text-xs !py-2.5 !px-5 mt-4">
+                <Download size={13} />
+                Get Full Report
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function DubaiReport() {
   const { user } = useAuth();
@@ -245,12 +454,12 @@ export default function DubaiReport() {
   }
 
   const heroImage =
-    resolveMediaUrl(report?.hero_image_url) ||
-    "https://images.unsplash.com/photo-1546412414-e1885e51cfa5?crop=entropy&cs=srgb&fm=jpg&w=1920&q=85";
+    (report?.hero_image_url && resolveMediaUrl(report.hero_image_url)) ||
+    "https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&w=2000&q=85";
 
   const brochureImage =
-    resolveMediaUrl(report?.brochure_image_url) ||
-    "https://res.cloudinary.com/dhxttgpfj/image/upload/v1784023538063/dubai_report_brochure.png";
+    (report?.brochure_image_url && resolveMediaUrl(report.brochure_image_url)) ||
+    "/dubai_report_brochure.png";
 
   return (
     <>
@@ -364,10 +573,6 @@ export default function DubaiReport() {
                   className="dr-brochure-img"
                   loading="lazy"
                 />
-                <div className="dr-brochure-badge">
-                  <Lock size={12} />
-                  Full Report — Members Only
-                </div>
               </div>
             </div>
 
@@ -375,7 +580,7 @@ export default function DubaiReport() {
             <div className="dr-preview-right">
               <div className="dr-section-label">What's Inside</div>
               <h2 className="dr-preview-title">
-                100 Pages of{" "}
+                45 Pages of{" "}
                 <span className="gold-text">Institutional-Grade</span> Research
               </h2>
               <p className="dr-preview-sub">
@@ -422,6 +627,9 @@ export default function DubaiReport() {
           </div>
         </section>
 
+        {/* ══════════ PAGE PREVIEW CAROUSEL ══════════ */}
+        <PagePreviewCarousel />
+
         {/* ══════════ CTA / REGISTRATION ══════════ */}
         <section
           ref={ctaRef}
@@ -442,18 +650,16 @@ export default function DubaiReport() {
                   If it didn't start, please click the button below to download the brochure.
                 </p>
                 <div className="dr-success-actions">
-                  {report?.brochure_download_url && (
-                    <a
-                      href={resolveMediaUrl(report.brochure_download_url)}
-                      download
-                      target="_blank"
-                      rel="noreferrer"
-                      className="btn-gold"
-                    >
-                      <Download size={14} />
-                      Download Brochure
-                    </a>
-                  )}
+                  <a
+                    href={report?.brochure_download_url ? resolveMediaUrl(report.brochure_download_url) : REPORT_PDF_URL}
+                    download="Triad_Dubai_Market_Report_2003-2026.pdf"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn-gold"
+                  >
+                    <Download size={14} />
+                    Download Report
+                  </a>
                   <Link to="/projects" className="dr-ghost-btn-dark">
                     Explore Our Projects
                     <ArrowRight size={14} />
@@ -496,16 +702,16 @@ export default function DubaiReport() {
                       user={user}
                       onSuccess={() => {
                         setRegistered(true);
-                        if (report?.brochure_download_url) {
-                          const downloadUrl = resolveMediaUrl(report.brochure_download_url);
-                          const link = document.createElement("a");
-                          link.href = downloadUrl;
-                          link.setAttribute("download", "");
-                          link.setAttribute("target", "_blank");
-                          document.body.appendChild(link);
-                          link.click();
-                          document.body.removeChild(link);
-                        }
+                        const downloadUrl = report?.brochure_download_url
+                          ? resolveMediaUrl(report.brochure_download_url)
+                          : REPORT_PDF_URL;
+                        const link = document.createElement("a");
+                        link.href = downloadUrl;
+                        link.setAttribute("download", "Triad_Dubai_Market_Report_2003-2026.pdf");
+                        link.setAttribute("target", "_blank");
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
                       }}
                     />
                   </div>
