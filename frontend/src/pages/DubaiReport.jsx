@@ -30,7 +30,7 @@ import {
 
 // Preview page images extracted from the PDF
 const PREVIEW_PAGES = Array.from({ length: 8 }, (_, i) => ({
-  src: `/dubai_report_pages/page_${i + 1}.png`,
+  src: `https://res.cloudinary.com/dhxttgpfj/image/upload/triad-realty/dubai_report_pages/page_${i + 1}.png`,
   alt: `Dubai Report page ${i + 1}`,
 }));
 
