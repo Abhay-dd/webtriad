@@ -37,16 +37,16 @@ ENV LOG_FORMAT=json
 ENV PORT=8000
 
 # Auth credentials
-ENV JWT_SECRET=e2a516d4d6cfd637084873755f7469cdfc601a86be19704578421f91378a8529
+ENV JWT_SECRET=""
 ENV DEVELOPER_EMAIL=developer@triad.ae
-ENV DEVELOPER_PASSWORD=Dev@Triad2024!
+ENV DEVELOPER_PASSWORD=""
 ENV OWNER_EMAIL=owner@triad.ae
-ENV OWNER_PASSWORD=Own@Triad2024!
+ENV OWNER_PASSWORD=""
 ENV STAFF_EMAIL=normal@triad.ae
-ENV STAFF_PASSWORD=Staff@Triad2024!
+ENV STAFF_PASSWORD=""
 
 # Database
-ENV MONGO_URI=mongodb+srv://king8637g4ff_db_user:Triad123456@triad-cluster.zfjnhni.mongodb.net/?retryWrites=true&w=majority&appName=triad-cluster
+ENV MONGO_URI=""
 ENV DB_NAME=triad_realty
 
 # Hosts & CORS
@@ -54,9 +54,9 @@ ENV ALLOWED_HOSTS=webtriad-9.onrender.com,*.onrender.com,localhost,127.0.0.1
 ENV CORS_ORIGINS=https://webtriad-9.onrender.com
 
 # Cloudinary — persistent image storage
-ENV CLOUDINARY_CLOUD_NAME=dhxttgpfj
-ENV CLOUDINARY_API_KEY=586595859119989
-ENV CLOUDINARY_API_SECRET=ZOv0THiwXmBw4KvhYoFdP3CeuEE
+ENV CLOUDINARY_CLOUD_NAME=""
+ENV CLOUDINARY_API_KEY=""
+ENV CLOUDINARY_API_SECRET=""
 
 # Optional
 ENV REELLY_API_BASE=https://search-listings-production.up.railway.app/v1

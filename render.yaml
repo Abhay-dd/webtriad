@@ -69,11 +69,11 @@ services:
 
       # ── Cloudinary — persistent image/video storage ───────────────────────────
       - key: CLOUDINARY_CLOUD_NAME
-        value: dhxttgpfj
+        sync: false
       - key: CLOUDINARY_API_KEY
-        value: "586595859119989"
+        sync: false
       - key: CLOUDINARY_API_SECRET
-        value: ZOv0THiwXmBw4KvhYoFdP3CeuEE
+        sync: false
 
     # Health-check hits the /api/ root endpoint defined in server.py
     healthCheckPath: /api/

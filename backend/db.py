@@ -10,8 +10,7 @@ from dotenv import load_dotenv
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
-DEFAULT_MONGO_URL = "mongodb+srv://king8637g4ff_db_user:Triad123456@triad-cluster.zfjnhni.mongodb.net/?retryWrites=true&w=majority&appName=triad-cluster"
-MONGO_URL = os.environ.get("MONGO_URL") or os.environ.get("MONGO_URI") or DEFAULT_MONGO_URL
+MONGO_URL = os.environ.get("MONGO_URL") or os.environ.get("MONGO_URI") or ""
 DB_NAME = os.environ.get("DB_NAME", "triad_realty")
 USE_MONGO = False
 db = None

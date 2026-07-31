@@ -70,9 +70,9 @@ UPLOADS_DIR = Path(os.environ.get("UPLOADS_DIR", str(ROOT_DIR / "uploads"))).res
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── Cloudinary configuration (used for persistent image storage on Render) ──
-_CLOUDINARY_CLOUD_NAME = os.environ.get("CLOUDINARY_CLOUD_NAME", "dhxttgpfj")
-_CLOUDINARY_API_KEY = os.environ.get("CLOUDINARY_API_KEY", "586595859119989")
-_CLOUDINARY_API_SECRET = os.environ.get("CLOUDINARY_API_SECRET", "ZOv0THiwXmBw4KvhYoFdP3CeuEE")
+_CLOUDINARY_CLOUD_NAME = os.environ.get("CLOUDINARY_CLOUD_NAME", "")
+_CLOUDINARY_API_KEY = os.environ.get("CLOUDINARY_API_KEY", "")
+_CLOUDINARY_API_SECRET = os.environ.get("CLOUDINARY_API_SECRET", "")
 _USE_CLOUDINARY = bool(_CLOUDINARY_CLOUD_NAME and _CLOUDINARY_API_KEY and _CLOUDINARY_API_SECRET)
 if _USE_CLOUDINARY:
     cloudinary.config(

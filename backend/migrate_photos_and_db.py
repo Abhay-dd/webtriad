@@ -21,14 +21,12 @@ from pymongo import MongoClient
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
-# ── Fallback Defaults ────────────────────────────────────────────────────────
-DEFAULT_MONGO_URL = "mongodb+srv://king8637g4ff_db_user:Triad123456@triad-cluster.zfjnhni.mongodb.net/?retryWrites=true&w=majority&appName=triad-cluster"
-MONGO_URL = os.environ.get("MONGO_URL", os.environ.get("MONGO_URI", DEFAULT_MONGO_URL))
+MONGO_URL = os.environ.get("MONGO_URL", os.environ.get("MONGO_URI", ""))
 DB_NAME = os.environ.get("DB_NAME", "triad_realty")
 
-CLOUDINARY_CLOUD_NAME = os.environ.get("CLOUDINARY_CLOUD_NAME", "dhxttgpfj")
-CLOUDINARY_API_KEY = os.environ.get("CLOUDINARY_API_KEY", "586595859119989")
-CLOUDINARY_API_SECRET = os.environ.get("CLOUDINARY_API_SECRET", "ZOv0THiwXmBw4KvhYoFdP3CeuEE")
+CLOUDINARY_CLOUD_NAME = os.environ.get("CLOUDINARY_CLOUD_NAME", "")
+CLOUDINARY_API_KEY = os.environ.get("CLOUDINARY_API_KEY", "")
+CLOUDINARY_API_SECRET = os.environ.get("CLOUDINARY_API_SECRET", "")
 
 # Initialize Cloudinary
 cloudinary.config(
