@@ -415,12 +415,7 @@ export default function About() {
 
           <div className="max-w-4xl mx-auto" data-reveal>
             <div className="aspect-video bg-[var(--ink)] relative overflow-hidden shadow-2xl shadow-black/10">
-              {homepageSettings.launch_video_url && homepageSettings.launch_video_url.includes("<iframe") ? (
-                <div 
-                  className="absolute inset-0 w-full h-full [&_iframe]:w-full [&_iframe]:h-full [&_iframe]:absolute [&_iframe]:inset-0" 
-                  dangerouslySetInnerHTML={{ __html: makeAutoplayAndMute(homepageSettings.launch_video_url) }} 
-                />
-              ) : youtubeId ? (
+              {youtubeId ? (
                 <iframe
                   src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&mute=1`}
                   title="Latest launch update video"
