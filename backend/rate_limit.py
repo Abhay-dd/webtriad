@@ -33,7 +33,7 @@ UPLOAD_POLICY = RateLimitPolicy("upload", 20, 3600)
 AI_GENERATION_POLICY = RateLimitPolicy("ai_generation", 10, 300)
 
 _AUTH_PATHS = {"/api/auth/login", "/api/auth/refresh"}
-_PASSWORD_RESET_PATHS = {"/api/auth/forgot-password", "/api/auth/reset-password"}
+_PASSWORD_RESET_PATHS = {"/api/auth/forgot-password", "/api/auth/reset-password", "/api/auth/verify-email", "/api/auth/resend-verification"}
 _ACCOUNT_CREATE_PATHS = {"/api/admin/owners", "/api/admin/staff"}
 _PUBLIC_POST_PATHS = {"/api/leads", "/api/contacts", "/api/applications", "/api/consultations"}
 

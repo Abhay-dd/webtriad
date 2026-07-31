@@ -8,8 +8,36 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
 from rate_limit import check_request_rate_limit, client_ip
+from security import ALL_ROLES, decode_token
 
 logger = logging.getLogger(__name__)
+
+
+class AdminRouteGuardMiddleware(BaseHTTPMiddleware):
+    """Middleware enforcing defense-in-depth authentication and role validation on all /api/admin/* endpoints at the routing layer."""
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+        if (path.startswith("/api/admin/") or path == "/api/admin") and request.method.upper() != "OPTIONS":
+            auth_header = request.headers.get("Authorization") or ""
+            if not auth_header.startswith("Bearer "):
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "Not authenticated"},
+                )
+            token = auth_header.split(" ", 1)[1].strip()
+            payload = decode_token(token)
+            if not payload:
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "Invalid or expired token"},
+                )
+            role = payload.get("role")
+            if role not in ALL_ROLES:
+                return JSONResponse(
+                    status_code=403,
+                    content={"detail": "Insufficient permissions for admin endpoints"},
+                )
+        return await call_next(request)
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):

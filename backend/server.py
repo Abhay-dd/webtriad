@@ -44,7 +44,7 @@ from deps import (
     require_owner_or_developer,
     require_staff_or_owner,
 )
-from middleware import RateLimitMiddleware, SecurityHeadersMiddleware
+from middleware import AdminRouteGuardMiddleware, RateLimitMiddleware, SecurityHeadersMiddleware
 from rate_limit import check_account_lockout, client_ip, record_failed_login, clear_failed_logins
 from seed_data import BLOGS, CAREERS, PROJECTS, GALLERY
 from security import (
@@ -58,6 +58,8 @@ from security import (
     validate_password_strength,
     generate_reset_token,
     verify_reset_token,
+    generate_verification_token,
+    verify_verification_token,
     generate_refresh_token,
     hash_refresh_token,
 )
@@ -213,6 +215,7 @@ app.add_middleware(TrustedHostMiddleware, allowed_hosts=_allowed_hosts)
 #     app.add_middleware(HTTPSRedirectMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RateLimitMiddleware)
+app.add_middleware(AdminRouteGuardMiddleware)
 
 
 def now_iso():
@@ -648,6 +651,7 @@ def user_public(u: dict) -> dict:
         "name": u.get("name"),
         "role": u["role"],
         "organization_id": u.get("organization_id"),
+        "is_verified": u.get("is_verified", True),
     }
 
 
@@ -1282,6 +1286,87 @@ async def reset_password(payload: ResetPasswordIn, request: Request):
     )
 
     return {"detail": "Password has been reset successfully"}
+
+
+class VerifyEmailIn(BaseModel):
+    token: str
+
+
+class ResendVerificationIn(BaseModel):
+    email: EmailStr
+
+
+@api_router.post("/auth/verify-email")
+async def verify_email(payload: VerifyEmailIn, request: Request):
+    """Verify a user's email address using a time-limited verification token."""
+    candidate_hash = hashlib.sha256(payload.token.encode()).hexdigest()
+    user = await db_find_one("users", {"verification_token_hash": candidate_hash})
+    if user and not verify_verification_token(
+        payload.token,
+        user["verification_token_hash"],
+        user.get("verification_token_expiry", ""),
+    ):
+        user = None
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired verification token",
+        )
+
+    await db_update_one(
+        "users",
+        {"id": user["id"], "verification_token_hash": candidate_hash},
+        {
+            "is_verified": True,
+            "verification_token_hash": None,
+            "verification_token_expiry": None,
+        },
+    )
+    logger.info(
+        "auth.email_verified",
+        extra={
+            "event": "auth.email_verified",
+            "request_id": getattr(request.state, "request_id", None),
+            "client_ip": client_ip(request),
+            "user_id": user["id"],
+        },
+    )
+    return {"detail": "Email verified successfully"}
+
+
+@api_router.post("/auth/resend-verification")
+async def resend_verification(payload: ResendVerificationIn, request: Request):
+    """Generate and issue a new email verification token for unverified accounts."""
+    email = payload.email.strip().lower()
+    user = await db_find_one("users", {"email": email})
+    # Always return 200 to prevent email enumeration
+    if not user or user.get("is_verified", False):
+        return {"detail": "If that email exists and requires verification, a new link has been sent."}
+
+    plain_token, hashed_token, expiry_iso = generate_verification_token()
+    await db_update(
+        "users",
+        user["id"],
+        {
+            "verification_token_hash": hashed_token,
+            "verification_token_expiry": expiry_iso,
+        },
+    )
+    logger.info(
+        "auth.verification_issued",
+        extra={
+            "event": "auth.verification_issued",
+            "request_id": getattr(request.state, "request_id", None),
+            "client_ip": client_ip(request),
+            "user_id": user["id"],
+        },
+    )
+    response = {"detail": "If that email exists and requires verification, a new link has been sent."}
+    environment = os.environ.get("ENVIRONMENT", os.environ.get("APP_ENV", "development")).lower()
+    if environment not in {"production", "prod"}:
+        response.update({"verification_token": plain_token, "expires_at": expiry_iso})
+    return response
 
 
 # ----------------------------- Developer: owners & orgs -----------------------------
@@ -2624,8 +2709,12 @@ async def register_for_dubai_report(payload: DubaiReportLeadIn, request: Request
 
 @api_router.get("/admin/dubai-report/leads")
 async def list_dubai_report_leads(user=Depends(require_owner_or_developer)):
-    """Admin endpoint — list all Dubai Report registration leads."""
-    all_leads = await db_find("leads", {"source": "dubai_report"})
+    """Admin endpoint — list Dubai Report registration leads (filtered by organization for owners)."""
+    if user["role"] == ROLE_DEVELOPER:
+        all_leads = await db_find("leads", {"source": "dubai_report"})
+    else:
+        org_id = user.get("organization_id")
+        all_leads = await db_find("leads", {"source": "dubai_report", "organization_id": org_id})
     all_leads.sort(key=lambda x: x.get("created_at", ""), reverse=True)
     return {"count": len(all_leads), "results": all_leads}
 

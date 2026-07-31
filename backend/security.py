@@ -170,3 +170,30 @@ def verify_reset_token(plain_token: str, stored_hash: str, expiry_iso: str) -> b
         return secrets.compare_digest(candidate_hash, stored_hash)
     except Exception:
         return False
+
+
+# ---------------------------------------------------------------------------
+# Email verification token helpers
+# ---------------------------------------------------------------------------
+EMAIL_VERIFY_TOKEN_EXPIRE_HOURS = 24
+
+
+def generate_verification_token() -> tuple[str, str, str]:
+    """Return (plain_token, sha256_hash_of_token, expiry_iso)."""
+    plain = secrets.token_urlsafe(32)
+    hashed = hashlib.sha256(plain.encode()).hexdigest()
+    expiry = datetime.now(timezone.utc) + timedelta(hours=EMAIL_VERIFY_TOKEN_EXPIRE_HOURS)
+    return plain, hashed, expiry.isoformat()
+
+
+def verify_verification_token(plain_token: str, stored_hash: str, expiry_iso: str) -> bool:
+    """Return True only if token matches and has not expired."""
+    try:
+        expiry = datetime.fromisoformat(expiry_iso)
+        if datetime.now(timezone.utc) > expiry:
+            return False
+        candidate_hash = hashlib.sha256(plain_token.encode()).hexdigest()
+        return secrets.compare_digest(candidate_hash, stored_hash)
+    except Exception:
+        return False
+
